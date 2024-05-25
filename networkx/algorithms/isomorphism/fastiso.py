@@ -221,9 +221,8 @@ class GraphMatcher:
         #
         if self.node_match == None:
             self.node_match = lambda p1, p2: True
-
-        if self.edge_match == None:
-            self.edge_match = lambda p1, p2: True
+        # if self.edge_match == None:
+        #     self.edge_match = lambda p1, p2: True
         #
         self.labelled = labelled
         self.G1 = G1
@@ -567,6 +566,31 @@ class GraphMatcher:
         # valid
         return True
 
+    # def semantic_feasibility(self,G1_node_ind, G1_node, G2_node_ind, G2_node):
+    #     """_summary_
+
+    #     Returns:
+    #         _type_: _description_
+    #     """
+    #     if self.edge_match is not None:
+    #         # Cached lookups
+    #         G1nbrs = self.G1_adj[G1_node]
+    #         G2nbrs = self.G2_adj[G2_node]
+    #         edge_match = self.edge_match
+    #         #
+    #         for neighbor in G1nbrs:
+    #             #
+    #     return True
+
+    def compare_edge_attr(
+        self, G1_node_neighbors, G1_neighbors, G2_node_neighbors, G2_neighbors
+    ):
+        if self.edge_match != None:
+            return self.edge_match(
+                G1_node_neighbors[G1_neighbors], G2_node_neighbors[G2_neighbors]
+            )
+        return True
+
 
 class GMState:
     """_summary_"""
@@ -684,8 +708,11 @@ class GMState:
         #
         node_info.also_do = True
         #
+        G1_node_neighbors = self.G1_sub_state.G.adj[G1_node]
+        G2_node_neighbors = self.G2_sub_state.G.adj[G2_node]
+        #
         if self.graph_matcher.test == "iso" or self.graph_matcher.test == "sub-iso":
-            for neighbor in self.G2_sub_state.G.adj[G2_node]:
+            for neighbor in G2_node_neighbors:
                 neighbor_ind = self.G2_sub_state.G_nodes_ind[neighbor]
                 neighbor_corr_ind = self.G2_sub_state.m[neighbor_ind]
                 # if neighbor not in mapping
@@ -699,7 +726,11 @@ class GMState:
                     neighbor_corr = self.graph_matcher.G1_nodes[neighbor_corr_ind]
                     if self.graph_matcher.G1.number_of_edges(
                         G1_node, neighbor_corr
-                    ) != self.graph_matcher.G2.number_of_edges(G2_node, neighbor):
+                    ) != self.graph_matcher.G2.number_of_edges(
+                        G2_node, neighbor
+                    ) and self.graph_matcher.compare_edge_attr(
+                        G1_node_neighbors, neighbor_corr, G2_node_neighbors, neighbor
+                    ):
                         return False
             #
             node_info.num_c = (
@@ -709,7 +740,7 @@ class GMState:
             )
 
         elif self.graph_matcher.test == "sub-iso2":
-            for neighbor in self.G2_sub_state.G.adj[G2_node]:
+            for neighbor in G2_node_neighbors:
                 neighbor_ind = self.G2_sub_state.G_nodes_ind[neighbor]
                 neighbor_corr_ind = self.G2_sub_state.m[neighbor_ind]
                 # if neighbor not in mapping
@@ -729,7 +760,11 @@ class GMState:
                     neighbor_corr = self.graph_matcher.G1_nodes[neighbor_corr_ind]
                     if self.graph_matcher.G1.number_of_edges(
                         G1_node, neighbor_corr
-                    ) != self.graph_matcher.G2.number_of_edges(G2_node, neighbor):
+                    ) != self.graph_matcher.G2.number_of_edges(
+                        G2_node, neighbor
+                    ) and self.graph_matcher.compare_edge_attr(
+                        G1_node_neighbors, neighbor_corr, G2_node_neighbors, neighbor
+                    ):
                         return False
 
             #
@@ -740,7 +775,7 @@ class GMState:
             )
 
         else:
-            for neighbor in self.G1_sub_state.G.adj[G1_node]:
+            for neighbor in G1_node_neighbors:
                 neighbor_ind = self.G1_sub_state.G_nodes_ind[neighbor]
                 neighbor_corr_ind = self.G1_sub_state.m[neighbor_ind]
                 # neighbor in mapping
@@ -748,7 +783,11 @@ class GMState:
                     neighbor_corr = self.graph_matcher.G2_nodes[neighbor_corr_ind]
                     if self.graph_matcher.G1.number_of_edges(
                         G1_node, neighbor
-                    ) > self.graph_matcher.G2.number_of_edges(G2_node, neighbor_corr):
+                    ) > self.graph_matcher.G2.number_of_edges(
+                        G2_node, neighbor_corr
+                    ) and self.graph_matcher.compare_edge_attr(
+                        G1_node_neighbors, neighbor, G2_node_neighbors, neighbor_corr
+                    ):
                         return False
             ##
             for neighbor in self.G2_sub_state.G.adj[G2_node]:
