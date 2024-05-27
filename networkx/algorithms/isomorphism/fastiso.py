@@ -384,7 +384,7 @@ class GraphMatcher:
         search_time = time.time() - start_time
         print(f"fastiso compute_node_prop_time {search_time}")
         #
-        self.domains = [[False] * G1_size for _ in range(G1_size)]
+        self.domains = [[False] * G2_size for _ in range(G1_size)]
         self.domains_size = [0] * G1_size
         self.parents = None
         self.nodes_order = None
@@ -465,33 +465,57 @@ class GraphMatcher:
         domain_size = 0
         #
         domain = None
+        # Create dictionaries to group nodes based on their characteristics.
+        G1_nodes_dict = {}
+        G2_nodes_dict = {}
+        #
         if self.test == "iso":
-            for (ind1, node1), (ind2, node2) in itertools.product(
-                enumerate(self.G1_nodes), enumerate(self.G1_nodes)
-            ):
-                # for ind1 in G1_range:
-                # node1 = self.G1_nodes[ind1]
-                # domain = BitArray(0)
-                # self.domains[ind1] = domain
-                domain = self.domains[ind1]
-                # for ind2 in G2_range:
-                #     node2 = self.G2_nodes[ind2]
-                if (
-                    G1_degrees[ind1] == G2_degrees[ind2]
-                    and G1_self_edges[ind1] == G2_self_edges[ind2]
-                    and G1_sum_neighbors[ind1] == G2_sum_neighbors[ind2]
-                    and G1_max_neighbors[ind1] == G2_max_neighbors[ind2]
-                    and self.compare_node_attr(node1, node2)
-                ):
-                    domain[ind2] = True
-                    # domain_size += 1
-                    self.domains_size[ind1] += 1
-                #
-                # if(domain_size==0):
-                #     return False
-                # self.domains_size[ind1] = domain_size
-                # domain_size = 0
+            for ind, node in enumerate(self.G1_nodes):
+                key = (
+                    G1_degrees[ind],
+                    G1_self_edges[ind],
+                    G1_sum_neighbors[ind],
+                    G1_max_neighbors[ind],
+                )
+                if key not in G1_nodes_dict:
+                    G1_nodes_dict[key] = []
+                G1_nodes_dict[key].append((ind, node))
 
+            for ind, node in enumerate(self.G2_nodes):
+                key = (
+                    G2_degrees[ind],
+                    G2_self_edges[ind],
+                    G2_sum_neighbors[ind],
+                    G2_max_neighbors[ind],
+                )
+                if key not in G2_nodes_dict:
+                    G2_nodes_dict[key] = []
+                G2_nodes_dict[key].append((ind, node))
+
+            # Initialize the domains
+            # Avoid the worst case.
+            if len(G1_nodes_dict) == 1 and len(G2_nodes_dict) == 1:
+                if list(G1_nodes_dict.keys())[0] == list(G1_nodes_dict.keys())[0]:
+                    G1_size = self.G1.number_of_nodes()
+                    G2_size = self.G2.number_of_nodes()
+                    self.domains = [[True] * G2_size for _ in range(G1_size)]
+                    self.domains_size = [G2_size] * G1_size
+                else:
+                    return True
+            else:
+                for key in G1_nodes_dict:
+                    if key in G2_nodes_dict:
+                        G1_group = G1_nodes_dict[key]
+                        G2_group = G2_nodes_dict[key]
+                        for ind1, node1 in G1_group:
+                            domain = self.domains[ind1]
+                            for ind2, node2 in G2_group:
+                                if self.compare_node_attr(node1, node2):
+                                    domain[ind2] = True
+                                    self.domains_size[ind1] += 1
+                    else:
+                        return False
+        #
         # elif self.test == "sub-iso":
         #     for ind1 in range(self.G1.number_of_nodes()):
         #         node1 = self.G1_nodes[ind1]
@@ -907,28 +931,28 @@ class GMSubState:
 
     def add_node(self, node_id, node):
         neighbor_ind = 0
-        for neighbor in self.G.adj[node]:
+        for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
             self.c[neighbor_ind] += 1
             self.c_sum[neighbor_ind] += node_id
 
     def remove_node(self, node_id, node):
         neighbor_ind = 0
-        for neighbor in self.G.adj[node]:
+        for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
             self.c[neighbor_ind] -= 1
             self.c_sum[neighbor_ind] -= node_id
 
     def add_node_(self, node_id, node, t_node_id):
         neighbor_ind = 0
-        for neighbor in self.G.adj[node]:
+        for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
             self.c[neighbor_ind] += 1
             self.c_sum[neighbor_ind] += t_node_id
 
     def remove_node_(self, node_id, node, t_node_id):
         neighbor_ind = 0
-        for neighbor in self.G.adj[node]:
+        for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
             self.c[neighbor_ind] -= 1
             self.c_sum[neighbor_ind] -= t_node_id
