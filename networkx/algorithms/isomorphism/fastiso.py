@@ -84,15 +84,18 @@ class NodeOrdoring:
     """
 
     def __init__(self, id_, node_, prob_, deg_):
-        self.id = id_
-        self.node = node_
-        self.prob = prob_
-        self.deg = deg_
-        self.degNeigh = 0
-        self.degM = 0
-        self.degMNeigh = 0
-        self.degMNeighMax = 0
-        self.degMo = 0
+        self.id = id_  # Identifier (numerical) of the node
+        self.node = node_  # Identifier (numerical) of the node
+        self.prob = prob_  # Probability associated with the node
+        self.deg = deg_  # degree of the node without counting duplicate nodes
+        self.degNeigh = 0  # degree of the node with counting duplicate nodes
+        self.degM = 0  # number of neighbors contained in the mapping
+        self.degMNeigh = 0  # the sum of the degM attribute of the neighbors (that have neighbors in the mapping)
+        self.degMNeighMax = 0  # max of the degM attribute of the neighbors
+        self.degMo = (
+            0  # the number of neighbors that do not have neighbors in the mapping
+        )
+        # Flags indicating whether the node is present or a candidate for selection
         self.present = 0
         self.candidate = 0
 
@@ -129,8 +132,8 @@ class NodeCommand:
                 self.graph_matcher.G1_degrees[ind],
             )
             self.nodes[ind] = no
-            if self.graph_matcher.domains_size[ind] == 1:
-                sg_domain += 1
+            # if self.graph_matcher.domains_size[ind] == 1:
+            #     sg_domain += 1
         ##select first node
         selected_node = None
         selected_no = None
@@ -147,59 +150,56 @@ class NodeCommand:
         self.parents[selected_no.id] = None
         #
         self.update_no(selected_no)
-        self.compute_DegMNeigh()
+        self.compute_degMNeigh_and_degMo()
         n += 1
-        # singleton selection
-        if sg_domain > 0:
-            for no in self.nodes:
-                if no.present == 0 and no.prob == 1:
-                    self.nodes_order[n] = no.id
-                    self.nodes_degMNeighMax[n] = no.degMNeighMax
-                    self.update_no(no)
-                    self.compute_DegMNeigh()
-                    n += 1
+        # # singleton selection
+        # if sg_domain > 0:
+        #     for no in self.nodes:
+        #         if no.present == 0 and no.prob == 1:
+        #             self.nodes_order[n] = no.id
+        #             self.nodes_degMNeighMax[n] = no.degMNeighMax
+        #             self.update_no(no)
+        #             self.compute_degMNeigh_and_degMo()
+        #             n += 1
         #
         while n < size:
-            if self.graph_matcher.labelled:
-                selected_no = min(
-                    self.candidates,
-                    key=lambda k: (
-                        -k.degM,
-                        -k.degNeigh,  # not used for undirect graph
-                        -k.degMNeigh,
-                        -k.degMo,
-                        k.prob,
-                        -k.deg,
-                    ),
-                )
-            else:
-                selected_no = min(
-                    self.candidates,
-                    key=lambda k: (
-                        -k.degM,
-                        -k.degNeigh,  # not used for undirect graph
-                        -k.degMNeigh,
-                        -k.degMo,
-                        -k.prob,
-                        -k.deg,
-                    ),
-                )
-            #
-            # selected_no = self.nodes[selected_node]
+            if len(self.candidates) != 0:
+                if self.graph_matcher.labelled:
+                    selected_no = min(
+                        self.candidates,
+                        key=lambda k: (
+                            -k.degM,
+                            -k.degNeigh,  # not used for undirect graph
+                            -k.degMNeigh,
+                            -k.degMo,
+                            k.prob,
+                            -k.deg,
+                        ),
+                    )
+                else:
+                    selected_no = min(
+                        self.candidates,
+                        key=lambda k: (
+                            -k.degM,
+                            -k.degNeigh,  # not used for undirect graph
+                            -k.degMNeigh,
+                            -k.degMo,
+                            -k.prob,
+                            -k.deg,
+                        ),
+                    )
             # node which don't have neighbor
-            if selected_no.present:
+            else:
                 selected_no = min(self.nodes, key=lambda k: k.present)
-            #
-            # selected_no = self.nodes[selected_node]
             #
             self.nodes_order[n] = selected_no.id
             self.nodes_degMNeighMax[n] = selected_no.degMNeighMax
             #
             self.update_no(selected_no)
-            self.compute_DegMNeigh()
+            self.compute_degMNeigh_and_degMo()
             n += 1
 
-    def compute_DegMNeigh(self):
+    def compute_degMNeigh_and_degMo(self):
         max = 0
         node = None
         candidates_tmp = []
@@ -254,11 +254,11 @@ class GraphMatcher:
         self.edge_match = edge_match
         #
         self.labelled = labelled
-        self.G1 = G1
-        self.G2 = G2
-        self.G1_nodes = list(G1.nodes())
+        self.G1 = G2
+        self.G2 = G1
+        self.G1_nodes = list(self.G1.nodes())
         self.G1_nodes_ind = {node: ind for ind, node in enumerate(self.G1_nodes)}
-        self.G2_nodes = list(G2.nodes())
+        self.G2_nodes = list(self.G2.nodes())
         self.G2_nodes_ind = {node: ind for ind, node in enumerate(self.G2_nodes)}
         self.G1_degrees = [self.G1.degree[node] for node in self.G1_nodes]
         self.G2_degrees = [self.G2.degree[node] for node in self.G2_nodes]
@@ -470,6 +470,7 @@ class GraphMatcher:
         G2_nodes_dict = {}
         #
         if self.test == "iso":
+            ## Initialize the domains
             for ind, node in enumerate(self.G1_nodes):
                 key = (
                     G1_degrees[ind],
@@ -491,8 +492,6 @@ class GraphMatcher:
                 if key not in G2_nodes_dict:
                     G2_nodes_dict[key] = []
                 G2_nodes_dict[key].append((ind, node))
-
-            # Initialize the domains
             # Avoid the worst case.
             if len(G1_nodes_dict) == 1 and len(G2_nodes_dict) == 1:
                 if list(G1_nodes_dict.keys())[0] == list(G1_nodes_dict.keys())[0]:
@@ -516,48 +515,44 @@ class GraphMatcher:
                     else:
                         return False
         #
-        # elif self.test == "sub-iso":
-        #     for ind1 in range(self.G1.number_of_nodes()):
-        #         node1 = self.G1_nodes[ind1]
-        #         domain = BitArray(0)
-        #         self.domains[ind1] = domain
-        #         for ind2 in range(self.G2.number_of_nodes() - 1, -1, -1):
-        #             node2 = self.G2_nodes[ind2]
-        #             if (G1_degrees[ind1] <= G2_degrees[ind2] and
-        #                 G1_self_edges[ind1] == G2_self_edges[ind2] and
-        #                 G1_sum_neighbors[ind1] <= G2_sum_neighbors[ind2] and
-        #                 G1_max_neighbors[ind1] <= G2_max_neighbors[ind2] and
-        #                 self.compare_node_attr(node1,node2)
-        #                 ):
-        #                 domain.set(ind2, True)
-        #                 domain_size += 1
-        #         #
-        #         if(domain_size==0):
-        #             return False
-        #         self.domains_size[ind1] = domain_size
-        #         domain_size = 0
-
-        # else:
-        #     for ind1 in range(self.G1.number_of_nodes()):
-        #         node1 = self.G1_nodes[ind1]
-        #         domain = BitArray(0)
-        #         self.domains[ind1] = domain
-        #         for ind2 in range(self.G2.number_of_nodes() - 1, -1, -1):
-        #             node2 = self.G2_nodes[ind2]
-        #             if (G1_degrees[ind1] <= G2_degrees[ind2] and
-        #                 G1_self_edges[ind1] <= G2_self_edges[ind2] and
-        #                 G1_sum_neighbors[ind1] <= G2_sum_neighbors[ind2] and
-        #                 G1_max_neighbors[ind1] <= G2_max_neighbors[ind2] and
-        #                 self.compare_node_attr(node1,node2)
-        #                 ):
-        #                 domain.set(ind2, 1)
-        #                 domain_size += 1
-        #         #
-        #         if(domain_size==0):
-        #             return False
-        #         self.domains_size[ind1] = domain_size
-        #         domain_size = 0
+        elif self.test == "sub-iso":
+            for ind1, node1 in enumerate(self.G1_nodes):
+                domain = self.domains[ind1]
+                for ind2, node2 in enumerate(self.G2_nodes):
+                    if (
+                        G1_degrees[ind1] <= G2_degrees[ind2]
+                        and G1_self_edges[ind1] == G2_self_edges[ind2]
+                        and G1_sum_neighbors[ind1] <= G2_sum_neighbors[ind2]
+                        and G1_max_neighbors[ind1] <= G2_max_neighbors[ind2]
+                        and self.compare_node_attr(node1, node2)
+                    ):
+                        domain[ind2] = True
+                        domain_size += 1
+                #
+                if domain_size == 0:
+                    return False
+                self.domains_size[ind1] = domain_size
+                domain_size = 0
         #
+        else:
+            for ind1, node1 in enumerate(self.G1_nodes):
+                domain = self.domains[ind1]
+                for ind2, node2 in enumerate(self.G2_nodes):
+                    if (
+                        G1_degrees[ind1] <= G2_degrees[ind2]
+                        and G1_self_edges[ind1] <= G2_self_edges[ind2]
+                        and G1_sum_neighbors[ind1] <= G2_sum_neighbors[ind2]
+                        and G1_max_neighbors[ind1] <= G2_max_neighbors[ind2]
+                        and self.compare_node_attr(node1, node2)
+                    ):
+                        domain[ind2] = True
+                        domain_size += 1
+                #
+                if domain_size == 0:
+                    return False
+                self.domains_size[ind1] = domain_size
+                domain_size = 0
+
         return True
 
     def compute_node_ordoring(self):
@@ -707,13 +702,11 @@ class GMState:
         self.G2_nodes_info = [None] * G1_size
         #
         if self.graph_matcher.test == "iso" or self.graph_matcher.test == "sub-iso":
+            size_tmp = 0
             for ind in range(G1_size):
-                self.G1_nodes_info[ind] = GMNodeInfo(
-                    self.graph_matcher.nodes_degMNeighMax[ind] + 1
-                )
-                self.G2_nodes_info[ind] = GMNodeInfo(
-                    self.graph_matcher.nodes_degMNeighMax[ind] + 1
-                )
+                size_tmp = self.graph_matcher.nodes_degMNeighMax[ind] + 1
+                self.G1_nodes_info[ind] = GMNodeInfo(size_tmp)
+                self.G2_nodes_info[ind] = GMNodeInfo(size_tmp)
         else:
             for ind in range(G1_size):
                 self.G1_nodes_info[ind] = GMNodeInfo(0)
@@ -724,7 +717,7 @@ class GMState:
         for G1_node_ind, G1_node in enumerate(self.graph_matcher.G1_nodes):
             G2_node_ind = self.G1_sub_state.m[G1_node_ind]
             G2_node = self.graph_matcher.G2_nodes[G2_node_ind]
-            mapping[G2_node] = G1_node
+            mapping[G1_node] = G2_node
 
         return mapping
 
@@ -919,14 +912,14 @@ class GMSubState:
         self.G = G
         self.G_nodes_ind = G_nodes_ind
         G_size = self.G.number_of_nodes()
-        # matching
+        # mapping
         self.m = [None] * G_size
-        #
+        # corresponding to degM in NodeOrdoring class
         self.c = [0] * G_size
         #
         # self.c_in=[0]*G_size
         # self.c_out=[0]*G_size
-        #
+        # Sum of the IDs (numerical) of the neighbors in the mapping
         self.c_sum = [0] * G_size
 
     def add_node(self, node_id, node):
@@ -966,15 +959,19 @@ class GMNodeInfo:
     def __init__(self, size):
         self.DegMNeigh = [0] * size
         self.also_do = False
+        # corresponding to degM in NodeOrdoring class
         self.c = 0
+        # number of neighbors not in the mapping
         self.nc = 0
         # self.c_in=0
         # self.c_out=0
         # self.nc_in=0
         # self.nc_out=0
+        # Sum of the IDs (numerical) of the neighbors in the mapping
         self.c_sum = 0
-        #
+        # number of neighbors having neighbors in the mapping
         self.num_c = 0
+        # corresponding to degMo in NodeOrdoring class
         self.num_nc = 0
         # for monomorphism and sub-iso2
         self.DegMNeigh_sum = 0
