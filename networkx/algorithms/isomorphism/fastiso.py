@@ -1,110 +1,54 @@
-import itertools
 import sys
 import time
 
 __all__ = ["GraphMatcher", "DiGraphMatcher", "MultiGraphMatcher", "MultiDiGraphMatcher"]
 
-# class BitArray:
-#     """Implementation of bit array"""
+"""_summary_
+definitions : 
+- Number of neighbors: This is the number of distinct nodes to which a node is connected by one or more edges.
+- Number of edges (degree): This is the total number of edges connected to a node, including multiple edges.
 
-#     def __init__(self, _bytes_per_block, _size):
-#         _python_int_octect_step = sys.getsizeof(1) - sys.getsizeof(0)
-#         if _bytes_per_block % _python_int_octect_step != 0:
-#             print("")
-#             return
-#         self.bytes_per_block = _bytes_per_block
-#         self.bits_per_block = 8 * self.bytes_per_block
-#         # block value in decimale
-#         # self.block_value = pow(2, self.bits_per_block) - 1
-#         self.block_value = 0
-#         self.bits = []
-#         self.nblocks = 0
-#         #
-#         if _size != None:
-#             curr_size = 0
-#             while curr_size < _size:
-#                 self.bits.append(self.block_value)
-#                 self.nblocks += 1
-#                 curr_size += self.bits_per_block
-
-#     def set(self, ind, value):
-#         curr_size = self.nblocks * self.bits_per_block
-#         if ind >= 0:
-#             self.resize(ind + 1)
-#         if value != self.get(ind):
-#             block_index = ind // self.bits_per_block
-#             bit_index = ind % self.bits_per_block
-#             self.bits[block_index] ^= 1 << bit_index
-
-#     def get(self, ind):
-#         curr_size = self.nblocks * self.bits_per_block
-#         if ind >= 0 and ind < curr_size:
-#             block_index = ind // self.bits_per_block
-#             bit_index = ind % self.bits_per_block
-#             ## shift to the right
-#             return (self.bits[block_index] >> bit_index) & 1
-#         return 0
-
-#     def resize(self, new_size):
-#         curr_size = self.nblocks * self.bits_per_block
-#         while curr_size < new_size:
-#             self.bits.append(self.block_value)
-#             self.nblocks += 1
-#             curr_size += self.bits_per_block
+let G is a simple graph, and n, node in G :
+Number_of_neighbors(n) equal to Number_of_edges(n)
+if G is a multi-graph Number_of_neighbors(n) not necessacary equal to Number_of_edges(n)
+Number_of_neighbors(n) <= Number_of_edges(n)
+"""
 
 
-class BitArray:
-    """Implementation of bit array"""
+class NodeOrdoringProp:
+    """Class representing the properties used for node ordering in graph matching.
 
-    def __init__(self, _size):
-        self.size = _size
-        self.bits = [False] * _size
-
-    def set(self, ind, value):
-        if ind >= self.size:
-            self.resize(ind + 1)
-
-        self.bits[ind] = value
-
-    def get(self, ind):
-        if ind >= 0 and ind < self.size:
-            return self.bits[ind]
-        return 0
-
-    def resize(self, new_size):
-        self.bits = [False] * new_size
-        self.size = new_size
-
-
-class NodeOrdoring:
-    """_summary_
-
-    Returns:
-        _type_: _description_
+    Attributes:
+        id : Identifier (numerical) of the node.
+        node : Identifier of the node.
+        prob : Probability associated with the node.
+        deg : Degree of the node.
+        degNeigh : Number of edges contained in the mapping.
+        degM : Number of neighbors contained in the mapping.
+        degMNeigh : Sum of the degM attribute of the neighbors that have neighbors in the mapping.
+        degMNeighMax : Maximum of the degM attribute of the neighbors.
+        degMo : Number of neighbors that do not have neighbors in the mapping.
+        present : Flag indicating if the node is present (1) in mapping or not (0).
+        candidate : Flag indicating if the node is a candidate for selection (1) or not (0).
     """
 
-    def __init__(self, id_, node_, prob_, deg_):
-        self.id = id_  # Identifier (numerical) of the node
-        self.node = node_  # Identifier (numerical) of the node
-        self.prob = prob_  # Probability associated with the node
-        self.deg = deg_  # degree of the node without counting duplicate nodes
-        self.degNeigh = 0  # degree of the node with counting duplicate nodes
-        self.degM = 0  # number of neighbors contained in the mapping
-        self.degMNeigh = 0  # the sum of the degM attribute of the neighbors (that have neighbors in the mapping)
-        self.degMNeighMax = 0  # max of the degM attribute of the neighbors
-        self.degMo = (
-            0  # the number of neighbors that do not have neighbors in the mapping
-        )
-        # Flags indicating whether the node is present or a candidate for selection
+    def __init__(self, id_, node_, prob_, deg_, degMo_):
+        self.id = id_
+        self.node = node_
+        self.prob = prob_
+        self.deg = deg_
+        self.degNeigh = 0
+        self.degM = 0
+        self.degMNeigh = 0
+        self.degMNeighMax = 0
+        self.degMo = degMo_
         self.present = 0
         self.candidate = 0
 
 
 class NodeCommand:
-    """_summary_
-
-    Returns:
-        _type_: _description_
+    """
+    Compute the node matching order using attributes of the NodeOrdoringProp class.
     """
 
     def __init__(
@@ -112,7 +56,13 @@ class NodeCommand:
     ):
         pass
 
+    #
     def compute_node_ordoring(self, graph_matcher):
+        """Computes the node ordering for graph matching.
+
+        Parameters:
+            graph_matcher.
+        """
         self.graph_matcher = graph_matcher
         size = self.graph_matcher.G1.number_of_nodes()
         #
@@ -122,46 +72,31 @@ class NodeCommand:
         self.nodes_order = [-1] * size
         self.nodes_degMNeighMax = [0] * size
         #
-        sg_domain = 0
         for ind, node in enumerate(self.graph_matcher.G1_nodes):
             # node = self.graph_matcher.G1_nodes[ind]
-            no = NodeOrdoring(
+            no = NodeOrdoringProp(
                 ind,
                 node,
-                self.graph_matcher.domains_size[ind],
+                self.graph_matcher.node_prob[ind],
                 self.graph_matcher.G1_degrees[ind],
+                len(self.graph_matcher.G1[node]),
             )
             self.nodes[ind] = no
-            # if self.graph_matcher.domains_size[ind] == 1:
-            #     sg_domain += 1
         ##select first node
-        selected_node = None
         selected_no = None
         n = 0
-        if self.graph_matcher.labelled or sg_domain > 0:
+        if self.graph_matcher.labelled:
             selected_no = min(self.nodes, key=lambda obj: obj.prob)
         else:
             selected_no = min(self.nodes, key=lambda obj: -obj.deg)
-
-        # selected_no = self.nodes[selected_node]
         #
         self.nodes_order[n] = selected_no.id
         self.nodes_degMNeighMax[n] = selected_no.degMNeighMax
         self.parents[selected_no.id] = None
         #
         self.update_no(selected_no)
-        self.compute_degMNeigh_and_degMo()
         n += 1
-        # # singleton selection
-        # if sg_domain > 0:
-        #     for no in self.nodes:
-        #         if no.present == 0 and no.prob == 1:
-        #             self.nodes_order[n] = no.id
-        #             self.nodes_degMNeighMax[n] = no.degMNeighMax
-        #             self.update_no(no)
-        #             self.compute_degMNeigh_and_degMo()
-        #             n += 1
-        #
+
         while n < size:
             if len(self.candidates) != 0:
                 if self.graph_matcher.labelled:
@@ -184,7 +119,7 @@ class NodeCommand:
                             -k.degNeigh,  # not used for undirect graph
                             -k.degMNeigh,
                             -k.degMo,
-                            -k.prob,
+                            k.prob,
                             -k.deg,
                         ),
                     )
@@ -196,72 +131,96 @@ class NodeCommand:
             self.nodes_degMNeighMax[n] = selected_no.degMNeighMax
             #
             self.update_no(selected_no)
-            self.compute_degMNeigh_and_degMo()
             n += 1
 
-    def compute_degMNeigh_and_degMo(self):
-        max = 0
-        node = None
-        candidates_tmp = []
-        for no in self.candidates:
-            if no.present == 0:
-                candidates_tmp.append(no)
-                max = 0
-                # reset
-                no.degMNeigh = 0
-                no.degMo = 0
-                node = no.node
-                for neighbor in self.graph_matcher.G1.neighbors(node):
-                    neighbor_ind = self.graph_matcher.G1_nodes_ind[neighbor]
-                    no_neigh = self.nodes[neighbor_ind]
-                    if no_neigh.present == 0:
-                        if no_neigh.degM > 0:
-                            no.degMNeigh += no_neigh.degM
-                            #
-                            if no_neigh.degM > max:
-                                max = no_neigh.degM
-                        else:
-                            no.degMo += 1
+    def update_degMNeigh_and_degMo(self, no):
+        node = no.node
+        degM = no.degM - 1
+        for neighbor in self.graph_matcher.G1.neighbors(node):
+            neighbor_ind = self.graph_matcher.G1_nodes_ind[neighbor]
+            no_neigh = self.nodes[neighbor_ind]
+            if no_neigh.present == 0:
+                if degM == 0:
+                    no_neigh.degMo -= 1
+                else:
+                    no_neigh.degMNeigh += 1
                 #
-                no.degMNeighMax = max
-
-        self.candidates = candidates_tmp
+                if no.degM > no_neigh.degMNeighMax:
+                    no_neigh.degMNeighMax = no.degM
 
     def update_no(self, no):
+        """Marks a node as present and updates its neighbors' properties.
+
+        Parameters:
+            no: NodeOrdoringProp corresponding to the node to be updated.
+        """
         no.present = 1
         no.candidate = 1
         no.degM = 0
         node = no.node
-        # s
-        # node=self.graph_matcher.G1_nodes[no.id]
+        #
         for neighbor in self.graph_matcher.G1.neighbors(node):
             neighbor_ind = self.graph_matcher.G1_nodes_ind[neighbor]
             no_neigh = self.nodes[neighbor_ind]
             if no_neigh.present == 0:
                 no_neigh.degM += 1
+                no_neigh.degNeigh += len(self.graph_matcher.G1[node][neighbor])
+                self.update_degMNeigh_and_degMo(no_neigh)
                 # no need DegNeigh for undirect graph
             if no_neigh.candidate == 0:
                 no_neigh.candidate = 1
                 self.candidates.append(no_neigh)
                 self.parents[no_neigh.id] = no.id
 
+        #
+        self.candidates = [no for no in self.candidates if no.present == 0]
+
 
 class GraphMatcher:
-    """fastiso implementation for undirect graph"""
+    """fastiso implementation for matching undirect graphs"""
 
-    def __init__(self, G1, G2, labelled, node_match=None, edge_match=None):
+    def __init__(self, G1, G2, node_label=None, node_match=None, edge_match=None):
+        """Initialize GraphMatcher.
+
+        Parameters
+        ----------
+        G1,G2: NetworkX Graph or MultiGraph instances.
+           The two graphs to check for isomorphism or monomorphism.
+
+        Examples
+        --------
+        To create a GraphMatcher which checks for isomorphism:
+
+        >>> from networkx.algorithms import isomorphism
+        >>> G1 = nx.path_graph(4)
+        >>> G2 = nx.path_graph(4)
+        >>> GM = isomorphism.GraphMatcher(G1, G2)
+        """
         self.node_match = node_match
         self.edge_match = edge_match
         #
-        self.labelled = labelled
+        self.node_label = node_label
+        self.labelled = False
+        if self.node_label != None:
+            self.labelled == True
+        #
         self.G1 = G2
         self.G2 = G1
         self.G1_nodes = list(self.G1.nodes())
         self.G1_nodes_ind = {node: ind for ind, node in enumerate(self.G1_nodes)}
         self.G2_nodes = list(self.G2.nodes())
         self.G2_nodes_ind = {node: ind for ind, node in enumerate(self.G2_nodes)}
+        #
         self.G1_degrees = [self.G1.degree[node] for node in self.G1_nodes]
         self.G2_degrees = [self.G2.degree[node] for node in self.G2_nodes]
+        #
+        self.G1_self_edges = [
+            self.G1.number_of_edges(node, node) for node in self.G1_nodes
+        ]
+        self.G2_self_edges = [
+            self.G2.number_of_edges(node, node) for node in self.G2_nodes
+        ]
+        #
         self.mapping = {}
         # Set recursion limit.
         self.old_recursion_limit = sys.getrecursionlimit()
@@ -272,7 +231,6 @@ class GraphMatcher:
 
         # Declare that we will be searching for a graph-graph isomorphism.
         self.test = "iso"
-        # self.initialize()
 
     def is_isomorphic(self):
         """Returns True if G1 and G2 are isomorphic graphs."""
@@ -348,8 +306,8 @@ class GraphMatcher:
                 G2_node_ind = self.G2_nodes_ind[G2_node]
                 if (
                     self.state.G2_sub_state.m[G2_node_ind] == None
-                    and self.domains[G1_node_ind][G2_node_ind]
-                    and self.syntactic_feasibility(
+                    # and self.domains[G1_node_ind][G2_node_ind]
+                    and self._feasibility(
                         G1_node_ind,
                         G1_node,
                         G2_node_ind,
@@ -367,32 +325,57 @@ class GraphMatcher:
                 if G2_node_info.also_do:
                     G2_node_info.clear()
 
+    def initialize_sate(self):
+        self.state = GMState(self)
+
     def initialize(self):
         """_summary_"""
         G1_size = self.G1.number_of_nodes()
         G2_size = self.G2.number_of_nodes()
+        # fast check
+        if self.test == "iso":
+            if self.G1.order() != self.G2.order():
+                return False
+            if sorted(self.G1_degrees) != sorted(self.G2_degrees):
+                return False
+        else:
+            if G1_size > G2_size:
+                return False
+
+            if self.G1.number_of_edges() > self.G2.number_of_edges():
+                return False
+
+            if (
+                sorted(self.G1_degrees)[G1_size - 1]
+                > sorted(self.G2_degrees)[G2_size - 1]
+            ):
+                return False
         #
         start_time = time.time()
         (
             self.G1_sum_neighbors_degree,
             self.G1_max_neighbors_degree,
-        ) = self.compute_node_prop(self.G1, self.G1_nodes_ind, self.G1_degrees)
+        ) = self.compute_node_prop(
+            self.G1, self.G1_nodes, self.G1_nodes_ind, self.G1_degrees
+        )
         (
             self.G2_sum_neighbors_degree,
             self.G2_max_neighbors_degree,
-        ) = self.compute_node_prop(self.G2, self.G2_nodes_ind, self.G2_degrees)
+        ) = self.compute_node_prop(
+            self.G2, self.G2_nodes, self.G2_nodes_ind, self.G2_degrees
+        )
         search_time = time.time() - start_time
         print(f"fastiso compute_node_prop_time {search_time}")
         #
-        self.domains = [[False] * G2_size for _ in range(G1_size)]
-        self.domains_size = [0] * G1_size
+        # node probability
+        self.node_prob = [0] * G1_size
         self.parents = None
         self.nodes_order = None
         self.nodes_degMNeighMax = None
         #
         start_time = time.time()
         # compute initial domain
-        if not self.compute_initial_domain():
+        if not self.compute_node_probability():
             return False
         search_time = time.time() - start_time
         print(f"fastiso compute_initial_domain_time {search_time}")
@@ -408,17 +391,17 @@ class GraphMatcher:
         print(f"fastiso compute_node_ordoring_time {search_time}")
         # print(self.parents)
         #
-        self.domains_size = None
+        self.node_prob = None
         start_time = time.time()
         # initialize state
-        self.state = GMState(self)
+        self.initialize_sate()
         search_time = time.time() - start_time
         print(f"fastiso state_time {search_time}")
         # self.nodes_degMNeighMax=None
         # matching
         return True
 
-    def compute_node_prop(self, G, G_nodes_ind, G_degrees):
+    def compute_node_prop(self, G, G_nodes, G_nodes_ind, G_degrees):
         """_summary_
 
         Args:
@@ -430,131 +413,76 @@ class GraphMatcher:
         # max of neighbors degree
         max_neighbors_degree = [0] * G_size
         #
-        sum = 0
-        max = 0
-        deg = 0
-        ind = 0
-        #
-        for node in G:
-            for neighbor in G[node]:
-                neighbor_ind = G_nodes_ind[neighbor]
-                deg = G_degrees[neighbor_ind]
-                sum += deg
-                if deg > max:
-                    max = deg
-            sum_neighbors_degree[ind] = sum
-            max_neighbors_degree[ind] = max
-            ind += 1
-            max = 0
-            sum = 0
+        for ind, node in enumerate(G_nodes):
+            neighbors = G[node]
+            neighbor_degrees = [
+                G_degrees[G_nodes_ind[neighbor]] for neighbor in neighbors
+            ]
+            sum_neighbors_degree[ind] = sum(neighbor_degrees)
+            max_neighbors_degree[ind] = max(neighbor_degrees)
+
         return sum_neighbors_degree, max_neighbors_degree
 
-    def compute_initial_domain(self):
+    def compute_node_probability(self):
+        G1_size = self.G1.number_of_nodes()
+        G2_size = self.G2.number_of_nodes()
         #
-        # G1_range=list(range(self.G1.number_of_nodes()))
-        # G2_range=list(range(self.G2.number_of_nodes() - 1, -1, -1))
+        max_degree = max(self.G2_degrees) + 1
+        degree_counter = [0] * max_degree
+        label_counter = {}
         #
-        G1_degrees = self.G1_degrees
-        G2_degrees = self.G2_degrees
-        G1_self_edges = [self.G1.number_of_edges(node, node) for node in self.G1_nodes]
-        G2_self_edges = [self.G2.number_of_edges(node, node) for node in self.G2_nodes]
-        G1_sum_neighbors = self.G1_sum_neighbors_degree
-        G2_sum_neighbors = self.G2_sum_neighbors_degree
-        G1_max_neighbors = self.G1_max_neighbors_degree
-        G2_max_neighbors = self.G2_max_neighbors_degree
-        domain_size = 0
-        #
-        domain = None
-        # Create dictionaries to group nodes based on their characteristics.
-        G1_nodes_dict = {}
-        G2_nodes_dict = {}
-        #
-        if self.test == "iso":
-            ## Initialize the domains
-            for ind, node in enumerate(self.G1_nodes):
-                key = (
-                    G1_degrees[ind],
-                    G1_self_edges[ind],
-                    G1_sum_neighbors[ind],
-                    G1_max_neighbors[ind],
-                )
-                if key not in G1_nodes_dict:
-                    G1_nodes_dict[key] = []
-                G1_nodes_dict[key].append((ind, node))
-
+        degree = 0
+        node_label = None
+        if self.node_label != None:
             for ind, node in enumerate(self.G2_nodes):
-                key = (
-                    G2_degrees[ind],
-                    G2_self_edges[ind],
-                    G2_sum_neighbors[ind],
-                    G2_max_neighbors[ind],
-                )
-                if key not in G2_nodes_dict:
-                    G2_nodes_dict[key] = []
-                G2_nodes_dict[key].append((ind, node))
-            # Avoid the worst case.
-            if len(G1_nodes_dict) == 1 and len(G2_nodes_dict) == 1:
-                if list(G1_nodes_dict.keys())[0] == list(G1_nodes_dict.keys())[0]:
-                    G1_size = self.G1.number_of_nodes()
-                    G2_size = self.G2.number_of_nodes()
-                    self.domains = [[True] * G2_size for _ in range(G1_size)]
-                    self.domains_size = [G2_size] * G1_size
+                degree = self.G2_degrees[ind]
+                degree_counter[degree] += 1
+                #
+                node_label = self.G2.nodes[node][self.node_label]
+                if node_label in label_counter:
+                    label_counter[node_label] += 1
                 else:
-                    return True
-            else:
-                for key in G1_nodes_dict:
-                    if key in G2_nodes_dict:
-                        G1_group = G1_nodes_dict[key]
-                        G2_group = G2_nodes_dict[key]
-                        for ind1, node1 in G1_group:
-                            domain = self.domains[ind1]
-                            for ind2, node2 in G2_group:
-                                if self.compare_node_attr(node1, node2):
-                                    domain[ind2] = True
-                                    self.domains_size[ind1] += 1
-                    else:
-                        return False
-        #
-        elif self.test == "sub-iso":
-            for ind1, node1 in enumerate(self.G1_nodes):
-                domain = self.domains[ind1]
-                for ind2, node2 in enumerate(self.G2_nodes):
-                    if (
-                        G1_degrees[ind1] <= G2_degrees[ind2]
-                        and G1_self_edges[ind1] == G2_self_edges[ind2]
-                        and G1_sum_neighbors[ind1] <= G2_sum_neighbors[ind2]
-                        and G1_max_neighbors[ind1] <= G2_max_neighbors[ind2]
-                        and self.compare_node_attr(node1, node2)
-                    ):
-                        domain[ind2] = True
-                        domain_size += 1
-                #
-                if domain_size == 0:
-                    return False
-                self.domains_size[ind1] = domain_size
-                domain_size = 0
-        #
+                    label_counter[node_label] = 1
+            #
+            label_counter = {k: v / G2_size for k, v in label_counter.items()}
         else:
-            for ind1, node1 in enumerate(self.G1_nodes):
-                domain = self.domains[ind1]
-                for ind2, node2 in enumerate(self.G2_nodes):
-                    if (
-                        G1_degrees[ind1] <= G2_degrees[ind2]
-                        and G1_self_edges[ind1] <= G2_self_edges[ind2]
-                        and G1_sum_neighbors[ind1] <= G2_sum_neighbors[ind2]
-                        and G1_max_neighbors[ind1] <= G2_max_neighbors[ind2]
-                        and self.compare_node_attr(node1, node2)
-                    ):
-                        domain[ind2] = True
-                        domain_size += 1
+            for ind, node in enumerate(self.G2_nodes):
+                degree = self.G2_degrees[ind]
+                degree_counter[degree] += 1
+        #
+        degree_counter = degree_counter / G2_size
+        # calcul prob
+        prob = 0
+        if self.test == "iso":
+            for ind, node in enumerate(self.G1_nodes):
+                degree = self.G1_degrees[ind]
+                if self.node_label == None:
+                    prob = degree_counter[degree]
+                else:
+                    node_label = self.G1.nodes[node][self.node_label]
+                    prob == degree_counter[degree] * label_counter[node_label]
                 #
-                if domain_size == 0:
+                if prob == 0:
                     return False
-                self.domains_size[ind1] = domain_size
-                domain_size = 0
-
+                self.node_prob[ind] = prob
+        else:
+            prob_deg_sum = 0
+            for ind, node in enumerate(self.G1_nodes):
+                degree = self.G1_degrees[ind]
+                prob_deg_sum = sum(
+                    [value for i, value in enumerate(degree_counter) if i >= degree]
+                )
+                if self.node_label == None:
+                    prob = prob_deg_sum
+                else:
+                    prob = prob_deg_sum * label_counter[node_label]
+                #
+                if prob == 0:
+                    return False
+                self.node_prob[ind] = prob
         return True
 
+    #
     def compute_node_ordoring(self):
         no_cmd = NodeCommand()
         no_cmd.compute_node_ordoring(self)
@@ -562,7 +490,7 @@ class GraphMatcher:
         self.parents = no_cmd.parents
         self.nodes_degMNeighMax = no_cmd.nodes_degMNeighMax
 
-    def syntactic_feasibility(
+    def _feasibility(
         self, G1_node_ind, G1_node, G2_node_ind, G2_node, G1_node_info, G2_node_info
     ):
         c = 0
@@ -572,9 +500,19 @@ class GraphMatcher:
             # nc=self.G2.degree[G2_node]-c
             if (
                 G1_node_info.c != c
-                or G1_node_info.nc != self.G2_degrees[G2_node_ind] - c
+                # or G1_node_info.nc != self.G2_degrees[G2_node_ind] - c
+                or G1_node_info.nc != len(self.G2[G2_node]) - c
                 or G1_node_info.c_sum != self.state.G2_sub_state.c_sum[G2_node_ind]
+                # prop
+                or self.G1_max_neighbors_degree[G1_node_ind]
+                != self.G2_max_neighbors_degree[G2_node_ind]
+                or self.G1_max_neighbors_degree[G1_node_ind]
+                != self.G2_max_neighbors_degree[G2_node_ind]
+                or self.G1_self_edges[G1_node_ind] != self.G2_self_edges[G2_node_ind]
             ):
+                return False
+
+            if not self.compare_node_attr(G1_node, G2_node):
                 return False
 
             if not self.state.compute_G2_node_info_and_syntactic_feasibility(
@@ -594,9 +532,19 @@ class GraphMatcher:
             # nc=self.G2.degree[G2_node]-c
             if (
                 G1_node_info.c != c
-                or G1_node_info.nc > self.G2_degrees[G2_node_ind] - c
+                # or G1_node_info.nc > self.G2_degrees[G2_node_ind] - c
+                or G1_node_info.nc > len(self.G2[G2_node]) - c
                 or G1_node_info.c_sum != self.state.G2_sub_state.c_sum[G2_node_ind]
+                # prop
+                or self.G1_max_neighbors_degree[G1_node_ind]
+                > self.G2_max_neighbors_degree[G2_node_ind]
+                or self.G1_max_neighbors_degree[G1_node_ind]
+                > self.G2_max_neighbors_degree[G2_node_ind]
+                or self.G1_self_edges[G1_node_ind] != self.G2_self_edges[G2_node_ind]
             ):
+                return False
+
+            if not self.compare_node_attr(G1_node, G2_node):
                 return False
 
             if not self.state.compute_G2_node_info_and_syntactic_feasibility(
@@ -616,9 +564,19 @@ class GraphMatcher:
             # nc=self.G2.degree[G2_node]-c
             if (
                 G1_node_info.c != c
-                or G1_node_info.nc > self.G2_degrees[G2_node_ind] - c
+                # or G1_node_info.nc > self.G2_degrees[G2_node_ind] - c
+                or G1_node_info.nc > len(self.G2[G2_node]) - c
                 or G1_node_info.c_sum != self.state.G2_sub_state.c_sum[G2_node_ind]
+                # prop
+                or self.G1_max_neighbors_degree[G1_node_ind]
+                > self.G2_max_neighbors_degree[G2_node_ind]
+                or self.G1_max_neighbors_degree[G1_node_ind]
+                > self.G2_max_neighbors_degree[G2_node_ind]
+                or self.G1_self_edges[G1_node_ind] != self.G2_self_edges[G2_node_ind]
             ):
+                return False
+
+            if not self.compare_node_attr(G1_node, G2_node):
                 return False
 
             if not self.state.compute_G2_node_info_and_syntactic_feasibility(
@@ -637,7 +595,20 @@ class GraphMatcher:
         else:
             c = self.state.G2_sub_state.c[G2_node_ind]
             # nc=self.G2.degree[G2_node]-c
-            if G1_node_info.c > c or G1_node_info.nc > self.G2.degree[G2_node] - c:
+            if (
+                G1_node_info.c > c
+                # or G1_node_info.nc > self.G2.degree[G2_node] - c
+                or G1_node_info.nc > len(self.G2[G2_node]) - c
+                # prop
+                or self.G1_max_neighbors_degree[G1_node_ind]
+                > self.G2_max_neighbors_degree[G2_node_ind]
+                or self.G1_max_neighbors_degree[G1_node_ind]
+                > self.G2_max_neighbors_degree[G2_node_ind]
+                or self.G1_self_edges[G1_node_ind] > self.G2_self_edges[G2_node_ind]
+            ):
+                return False
+
+            if not self.compare_node_attr(G1_node, G2_node):
                 return False
 
             if not self.state.compute_G2_node_info_and_syntactic_feasibility(
@@ -655,37 +626,23 @@ class GraphMatcher:
         # valid
         return True
 
-    # def semantic_feasibility(self,G1_node_ind, G1_node, G2_node_ind, G2_node):
-    #     """_summary_
-
-    #     Returns:
-    #         _type_: _description_
-    #     """
-    #     if self.edge_match is not None:
-    #         # Cached lookups
-    #         G1nbrs = self.G1_adj[G1_node]
-    #         G2nbrs = self.G2_adj[G2_node]
-    #         edge_match = self.edge_match
-    #         #
-    #         for neighbor in G1nbrs:
-    #             #
-    #     return True
-
     def compare_edge_attr(
-        self, G1_node_neighbors, G1_neighbors, G2_node_neighbors, G2_neighbors
+        self, G1_node_neighbors, G1_neighbor, G2_node_neighbors, G2_neighbor
     ):
-        if self.edge_match != None:
-            return self.edge_match(
-                G1_node_neighbors[G1_neighbors], G2_node_neighbors[G2_neighbors]
-            )
+        # if self.edge_match != None:
+        #     return self.edge_match(
+        #         G1_node_neighbors[G1_neighbor], G2_node_neighbors[G2_neighbor]
+        #     )
         return True
 
     def compare_node_attr(self, G1_node, G2_node):
+        # if self.node_match != None:
+        #    return self.node_match(self.G1.nodes[G1_node],self.G2.nodes[G2_node])
         return True
 
 
 class GMState:
-    """_summary_"""
+    """Internal representation of state"""
 
     def __init__(self, graph_matcher):
         self.graph_matcher = graph_matcher
@@ -735,9 +692,17 @@ class GMState:
         self.G2_sub_state.m[G2_node_ind] = None
 
     def compute_G1_node_info(self, node_info, G1_node_ind, G1_node):
+        """Compute cutting rule informations for the node "G1_node" in G1
+
+        Args:
+            node_info (GMNodeInfo): _description_
+            G1_node_ind (int): numerical id for G1_node
+            G1_node (any): _description_
+        """
         node_info.also_do = True
         node_info.c = self.G1_sub_state.c[G1_node_ind]
-        node_info.nc = self.graph_matcher.G1_degrees[G1_node_ind] - node_info.c
+        # node_info.nc = self.graph_matcher.G1_degrees[G1_node_ind] - node_info.c
+        node_info.nc = len(self.graph_matcher.G1[G1_node]) - node_info.c
         #
         #
         if self.graph_matcher.test != "mono":
@@ -814,17 +779,33 @@ class GMState:
                 # neighbor in mapping
                 else:
                     neighbor_corr = self.graph_matcher.G1_nodes[neighbor_corr_ind]
-                    if self.graph_matcher.G1.number_of_edges(
-                        G1_node, neighbor_corr
-                    ) != self.graph_matcher.G2.number_of_edges(
-                        G2_node, neighbor
-                    ) and self.graph_matcher.compare_edge_attr(
-                        G1_node_neighbors, neighbor_corr, G2_node_neighbors, neighbor
+                    # if self.graph_matcher.G1.number_of_edges(
+                    #     G1_node, neighbor_corr
+                    # ) != self.graph_matcher.G2.number_of_edges(
+                    #     G2_node, neighbor
+                    # ) and self.graph_matcher.compare_edge_attr(
+                    #     G1_node_neighbors, neighbor_corr, G2_node_neighbors, neighbor
+                    # ):
+                    #     return False
+                    if (
+                        neighbor_corr not in self.graph_matcher.G1[G1_node]
+                        or
+                        # not self.graph_matcher.compare_edge_attr(
+                        #  G1_node_neighbors, neighbor_corr, G2_node_neighbors, neighbor
+                        # )
+                        not self.check_edge(
+                            G1_node,
+                            G2_node,
+                            G1_node_neighbors,
+                            neighbor_corr,
+                            G2_node_neighbors,
+                            neighbor,
+                        )
                     ):
                         return False
             #
             node_info.num_c = (
-                self.graph_matcher.G2_degrees[G2_node_ind]
+                len(self.graph_matcher.G2[G2_node])
                 - self.G2_sub_state.c[G2_node_ind]
                 - node_info.DegMNeigh[0]
             )
@@ -848,18 +829,34 @@ class GMState:
                 # neighbor in mapping
                 else:
                     neighbor_corr = self.graph_matcher.G1_nodes[neighbor_corr_ind]
-                    if self.graph_matcher.G1.number_of_edges(
-                        G1_node, neighbor_corr
-                    ) != self.graph_matcher.G2.number_of_edges(
-                        G2_node, neighbor
-                    ) and self.graph_matcher.compare_edge_attr(
-                        G1_node_neighbors, neighbor_corr, G2_node_neighbors, neighbor
+                    # if self.graph_matcher.G1.number_of_edges(
+                    #     G1_node, neighbor_corr
+                    # ) != self.graph_matcher.G2.number_of_edges(
+                    #     G2_node, neighbor
+                    # ) and self.graph_matcher.compare_edge_attr(
+                    #     G1_node_neighbors, neighbor_corr, G2_node_neighbors, neighbor
+                    # ):
+                    #     return False
+                    if (
+                        neighbor_corr not in self.graph_matcher.G1[G1_node]
+                        or
+                        # not self.graph_matcher.compare_edge_attr(
+                        #  G1_node_neighbors, neighbor_corr, G2_node_neighbors, neighbor
+                        # )
+                        not self.check_edge(
+                            G1_node,
+                            G2_node,
+                            G1_node_neighbors,
+                            neighbor_corr,
+                            G2_node_neighbors,
+                            neighbor,
+                        )
                     ):
                         return False
 
             #
             node_info.num_c = (
-                self.graph_matcher.G2_degrees[G2_node_ind]
+                len(self.graph_matcher.G2[G2_node])
                 - self.G2_sub_state.c[G2_node_ind]
                 - node_info.num_nc
             )
@@ -871,12 +868,28 @@ class GMState:
                 # neighbor in mapping
                 if neighbor_corr_ind != None:
                     neighbor_corr = self.graph_matcher.G2_nodes[neighbor_corr_ind]
-                    if self.graph_matcher.G1.number_of_edges(
-                        G1_node, neighbor
-                    ) > self.graph_matcher.G2.number_of_edges(
-                        G2_node, neighbor_corr
-                    ) and self.graph_matcher.compare_edge_attr(
-                        G1_node_neighbors, neighbor, G2_node_neighbors, neighbor_corr
+                    # if self.graph_matcher.G1.number_of_edges(
+                    #     G1_node, neighbor
+                    # ) > self.graph_matcher.G2.number_of_edges(
+                    #     G2_node, neighbor_corr
+                    # ) and self.graph_matcher.compare_edge_attr(
+                    #     G1_node_neighbors, neighbor, G2_node_neighbors, neighbor_corr
+                    # ):
+                    #     return False
+                    if (
+                        neighbor_corr not in self.graph_matcher.G2[G2_node]
+                        or
+                        # not self.graph_matcher.compare_edge_attr(
+                        #  G1_node_neighbors, neighbor, G2_node_neighbors, neighbor_corr
+                        # )
+                        not self.check_edge(
+                            G1_node,
+                            G2_node,
+                            G1_node_neighbors,
+                            neighbor,
+                            G2_node_neighbors,
+                            neighbor_corr,
+                        )
                     ):
                         return False
             ##
@@ -896,7 +909,7 @@ class GMState:
                         node_info.DegMNeigh_max = neighbor_c
             #
             node_info.num_c = (
-                self.graph_matcher.G2_degrees[G2_node_ind]
+                len(self.graph_matcher.G2[G2_node])
                 - self.G2_sub_state.c[G2_node_ind]
                 - node_info.num_nc
             )
@@ -904,9 +917,22 @@ class GMState:
         # valide
         return True
 
+    def check_edge(
+        self,
+        G1_node,
+        G2_node,
+        G1_node_neighbors,
+        G1_neighbor,
+        G2_node_neighbors,
+        G2_neighbor,
+    ):
+        return self.graph_matcher.compare_edge_attr(
+            G1_node_neighbors, G1_neighbor, G2_node_neighbors, G2_neighbor
+        )
+
 
 class GMSubState:
-    """_summary_"""
+    """class for managing feasibility sets and the state of the mapping."""
 
     def __init__(self, G, G_nodes_ind):
         self.G = G
@@ -914,13 +940,12 @@ class GMSubState:
         G_size = self.G.number_of_nodes()
         # mapping
         self.m = [None] * G_size
-        # corresponding to degM in NodeOrdoring class
+        # corresponding to degM in NodeOrdoring class (Number of neighbors contained in the mapping)
         self.c = [0] * G_size
-        #
-        # self.c_in=[0]*G_size
-        # self.c_out=[0]*G_size
         # Sum of the IDs (numerical) of the neighbors in the mapping
         self.c_sum = [0] * G_size
+
+    # upadate Feasibility Sets
 
     def add_node(self, node_id, node):
         neighbor_ind = 0
@@ -950,34 +975,70 @@ class GMSubState:
             self.c[neighbor_ind] -= 1
             self.c_sum[neighbor_ind] -= t_node_id
 
-        # self.m[node_id]=-1
-
 
 class GMNodeInfo:
-    """_summary_"""
+    """
+    A class to store and manage node information for cutting rule.
+
+    Attributes
+    ----------
+    DegMNeigh (only for isomorphism and sub-graph isomorphism) : list of int
+        A list where DegMNeigh[i]=val implies that the node has 'val' neighbors
+        who have 'i' neighbors in the mapping. For instance, DegMNeigh[0]=2
+        implies that the node has 2 neighbors who have no neighbors in the mapping.
+    c : int
+        Corresponds to degM in the NodeOrdoring class. It represents the number
+        of neighbors contained in the mapping.
+
+    nc : int
+        Represents the number of neighbors not in the mapping.
+
+    c_sum : int
+        The sum of the IDs (numerical) of the neighbors in the mapping.
+
+    num_c : int
+        The number of neighbors having neighbors in the mapping.
+
+    also_do : bool
+        A flag used for additional processing if required.
+
+    num_nc (only for monomorphism and sub-iso2) : int
+        Corresponds to degMo in the NodeOrdoring class. It represents the number
+        of neighbors that do not have neighbors in the mapping.
+        DegMNeigh[0] equal to num_nc
+
+    DegMNeigh_sum (only for monomorphism and sub-iso2) : int
+        The sum of the degM attribute of the neighbors.
+
+    DegMNeigh_max (only for monomorphism and sub-iso2) : int
+        The maximum of the degM attribute of the neighbors.
+    """
 
     def __init__(self, size):
-        self.DegMNeigh = [0] * size
-        self.also_do = False
-        # corresponding to degM in NodeOrdoring class
-        self.c = 0
-        # number of neighbors not in the mapping
-        self.nc = 0
-        # self.c_in=0
-        # self.c_out=0
-        # self.nc_in=0
-        # self.nc_out=0
-        # Sum of the IDs (numerical) of the neighbors in the mapping
-        self.c_sum = 0
-        # number of neighbors having neighbors in the mapping
-        self.num_c = 0
-        # corresponding to degMo in NodeOrdoring class
-        self.num_nc = 0
-        # for monomorphism and sub-iso2
-        self.DegMNeigh_sum = 0
-        self.DegMNeigh_max = 0
+        """
+        Initialize the GMNodeInfo instance.
+
+        Parameters
+        ----------
+        size : int
+            The size of the DegMNeigh list.
+        """
+        self.DegMNeigh = [0] * size  # Initialize DegMNeigh with zeros
+        self.c = 0  # Number of neighbors in the mapping
+        self.nc = 0  # Number of neighbors not in the mapping
+        self.c_sum = 0  # Sum of IDs of neighbors in the mapping
+        self.num_c = 0  # Number of neighbors having neighbors in the mapping
+        self.also_do = False  # Additional processing flag
+
+        # Only for monomorphism and sub-isomorphism
+        self.num_nc = 0  # Number of neighbors that do not have neighbors in the mapping
+        self.DegMNeigh_sum = 0  # Sum of the degM attribute of the neighbors
+        self.DegMNeigh_max = 0  # Maximum of the degM attribute of the neighbors
 
     def clear(self):
+        """
+        Reset all attributes to their default values.
+        """
         self.c = 0
         self.nc = 0
         self.num_c = 0
@@ -988,3 +1049,482 @@ class GMNodeInfo:
         #
         for ind in range(len(self.DegMNeigh)):
             self.DegMNeigh[ind] = 0
+
+
+"""""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """
+
+                                                            multi-graph
+
+""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """"""
+
+
+class MultiGraphMatcher(GraphMatcher):
+    def __init__(self, G1, G2, node_label=None, node_match=None, edge_match=None):
+        super().__init__(G1, G2, node_label, node_match, edge_match)
+
+    def initialize_sate(self):
+        self.state = MultiGMState(self)
+
+    def _feasibility(
+        self, G1_node_ind, G1_node, G2_node_ind, G2_node, G1_node_info, G2_node_info
+    ):
+        #
+        c_e = self.state.G2_sub_state.c_e[G2_node_ind]
+        if self.test == "iso":
+            if (
+                G1_node_info.c_e != c_e
+                or G1_node_info.nc_e != self.G2_degrees[G2_node_ind] - c_e
+            ):
+                return False
+        elif self.test == "sub-iso" or self.test == "sub-iso2":
+            if (
+                G1_node_info.c_e != c_e
+                or G1_node_info.nc_e > self.G2_degrees[G2_node_ind] - c_e
+            ):
+                return False
+        else:
+            if (
+                G1_node_info.c_e > c_e
+                or G1_node_info.nc_e > self.G2_degrees[G2_node_ind] - c_e
+            ):
+                return False
+        #
+        return super()._feasibility(
+            G1_node_ind, G1_node, G2_node_ind, G2_node, G1_node_info, G2_node_info
+        )
+
+
+class MultiGMState(GMState):
+    """_summary_"""
+
+    def __init__(self, graph_matcher):
+        self.graph_matcher = graph_matcher
+        #
+        self.G1_sub_state = MultiGMSubState(
+            self.graph_matcher.G1, self.graph_matcher.G1_nodes_ind
+        )
+        self.G2_sub_state = MultiGMSubState(
+            self.graph_matcher.G2, self.graph_matcher.G2_nodes_ind
+        )
+        #
+        G1_size = self.graph_matcher.G1.number_of_nodes()
+        self.G1_nodes_info = [None] * G1_size
+        self.G2_nodes_info = [None] * G1_size
+        #
+        if self.graph_matcher.test == "iso" or self.graph_matcher.test == "sub-iso":
+            size_tmp = 0
+            for ind in range(G1_size):
+                size_tmp = self.graph_matcher.nodes_degMNeighMax[ind] + 1
+                self.G1_nodes_info[ind] = MultiGMNodeInfo(size_tmp)
+                self.G2_nodes_info[ind] = MultiGMNodeInfo(size_tmp)
+        else:
+            for ind in range(G1_size):
+                self.G1_nodes_info[ind] = MultiGMNodeInfo(0)
+                self.G2_nodes_info[ind] = MultiGMNodeInfo(0)
+
+    def compute_G1_node_info(self, node_info, G1_node_ind, G1_node):
+        #
+        super().compute_G1_node_info(node_info, G1_node_ind, G1_node)
+        node_info.c_e = self.G1_sub_state.c_e[G1_node_ind]
+        node_info.nc_e = self.graph_matcher.G1_degrees[G1_node_ind] - node_info.c_e
+
+    def compute_G2_node_info_and_syntactic_feasibility(
+        self, G1_node_ind, G1_node, G2_node_ind, G2_node, node_info
+    ):
+        return super().compute_G2_node_info_and_syntactic_feasibility(
+            G1_node_ind, G1_node, G2_node_ind, G2_node, node_info
+        )
+
+    def check_edge(
+        self,
+        G1_node,
+        G2_node,
+        G1_node_neighbors,
+        G1_neighbor,
+        G2_node_neighbors,
+        G2_neighbor,
+    ):
+        if self.graph_matcher.test != "mono":
+            return len(G1_node_neighbors[G1_neighbor]) == len(
+                G2_node_neighbors[G2_neighbor]
+            ) and super().check_edge(
+                G1_node,
+                G2_node,
+                G1_node_neighbors,
+                G1_neighbor,
+                G2_node_neighbors,
+                G2_neighbor,
+            )
+        else:
+            return len(G1_node_neighbors[G1_neighbor]) <= len(
+                G2_node_neighbors[G2_neighbor]
+            ) and super().check_edge(
+                G1_node,
+                G2_node,
+                G1_node_neighbors,
+                G1_neighbor,
+                G2_node_neighbors,
+                G2_neighbor,
+            )
+
+
+class MultiGMSubState(GMSubState):
+    """_summary_"""
+
+    def __init__(self, G, G_nodes_ind):
+        super().__init__(G, G_nodes_ind)
+        # Number of edges in the mapping
+        self.c_e = [0] * self.G.number_of_nodes()
+
+    # upadate Feasibility Sets
+    def add_node(self, node_id, node):
+        neighbor_ind = 0
+        for neighbor in self.G[node]:
+            neighbor_ind = self.G_nodes_ind[neighbor]
+            self.c[neighbor_ind] += 1
+            self.c_e[neighbor_ind] += len(self.G[node][neighbor])
+            self.c_sum[neighbor_ind] += node_id
+
+    def add_node_(self, node_id, node, t_node_id):
+        neighbor_ind = 0
+        for neighbor in self.G[node]:
+            neighbor_ind = self.G_nodes_ind[neighbor]
+            self.c[neighbor_ind] += 1
+            self.c_e[neighbor_ind] += len(self.G[node][neighbor])
+            self.c_sum[neighbor_ind] += t_node_id
+
+    def remove_node(self, node_id, node):
+        neighbor_ind = 0
+        for neighbor in self.G[node]:
+            neighbor_ind = self.G_nodes_ind[neighbor]
+            self.c[neighbor_ind] -= 1
+            self.c_e[neighbor_ind] -= len(self.G[node][neighbor])
+            self.c_sum[neighbor_ind] -= node_id
+
+    def remove_node_(self, node_id, node, t_node_id):
+        neighbor_ind = 0
+        for neighbor in self.G[node]:
+            neighbor_ind = self.G_nodes_ind[neighbor]
+            self.c[neighbor_ind] -= 1
+            self.c_e[neighbor_ind] -= len(self.G[node][neighbor])
+            self.c_sum[neighbor_ind] -= t_node_id
+
+
+class MultiGMNodeInfo(GMNodeInfo):
+    """_summary_"""
+
+    def __init__(self, size):
+        super().__init__(size)
+        # Number of edges in the mapping
+        self.c_e = 0
+        # Number of edges not in the mapping
+        self.nc_e = 0
+
+    def clear(self):
+        super().clear()
+        self.c_e = 0
+        self.nc_e = 0
+
+
+"""""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """
+
+                                                            di-graph
+
+""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """"""
+
+
+class DiNodeCommand(NodeCommand):
+    def update_no(self, no):
+        """Marks a node as present and updates its neighbors' properties.
+
+        Parameters:
+            no: NodeOrdoringProp corresponding to the node to be updated.
+        """
+        no.present = 1
+        no.candidate = 1
+        no.degM = 0
+        node = no.node
+        #
+        for neighbor in self.graph_matcher.G1.neighbors(node):
+            neighbor_ind = self.graph_matcher.G1_nodes_ind[neighbor]
+            no_neigh = self.nodes[neighbor_ind]
+            if no_neigh.present == 0:
+                no_neigh.degM += 1
+                no_neigh.degNeigh += self.graph_matcher.G1_o.number_of_edges(
+                    node, neighbor
+                ) + self.graph_matcher.G1_o.number_of_edges(neighbor, node)
+                self.update_degMNeigh_and_degMo(no_neigh)
+                # no need DegNeigh for undirect graph
+            if no_neigh.candidate == 0:
+                no_neigh.candidate = 1
+                self.candidates.append(no_neigh)
+                self.parents[no_neigh.id] = no.id
+
+        #
+        self.candidates = [no for no in self.candidates if no.present == 0]
+
+
+class DiGraphMatcher(GraphMatcher):
+    """_summary_"""
+
+    def __init__(self, G1, G2, node_label=None, node_match=None, edge_match=None):
+        super().__init__(G1, G2, node_label, node_match, edge_match)
+        #
+        self.G1_degrees_in = [self.G1.in_degree[node] for node in self.G1_nodes]
+        self.G1_degrees_out = [self.G1.out_degree[node] for node in self.G1_nodes]
+        #
+        self.G2_degrees_in = [self.G2.in_degree[node] for node in self.G2_nodes]
+        self.G2_degrees_out = [self.G2.out_degree[node] for node in self.G2_nodes]
+
+    def initialize_sate(self):
+        self.state = DiGMState(self)
+
+    def initialize(self):
+        #
+        self.G1_o = self.G1
+        self.G2_o = self.G2
+        # create undirect graph view
+        self.G1 = self.G1_o.to_undirected(as_view=True)
+        self.G2 = self.G2_o.to_undirected(as_view=True)
+        #
+        return super().initialize()
+
+    def compute_node_ordoring(self):
+        no_cmd = DiNodeCommand()
+        no_cmd.compute_node_ordoring(self)
+        self.nodes_order = no_cmd.nodes_order
+        self.parents = no_cmd.parents
+        self.nodes_degMNeighMax = no_cmd.nodes_degMNeighMax
+
+    def _feasibility(
+        self, G1_node_ind, G1_node, G2_node_ind, G2_node, G1_node_info, G2_node_info
+    ):
+        #
+        c_e_in = self.state.G2_sub_state.c_e_in[G2_node_ind]
+        c_e_out = self.state.G2_sub_state.c_e_out[G2_node_ind]
+        if self.test == "iso":
+            if (
+                G1_node_info.c_e_in != c_e_in
+                or G1_node_info.nc_e_in != self.G2_degrees_out[G2_node_ind] - c_e_in
+                or G1_node_info.c_e_out != c_e_out
+                or G1_node_info.nc_e_out != self.G2_degrees_in[G2_node_ind] - c_e_out
+            ):
+                return False
+        elif self.test == "sub-iso" or self.test == "sub-iso2":
+            if (
+                G1_node_info.c_e_in != c_e_in
+                or G1_node_info.nc_e_in > self.G2_degrees_out[G2_node_ind] - c_e_in
+                or G1_node_info.c_e_out != c_e_out
+                or G1_node_info.nc_e_out > self.G2_degrees_in[G2_node_ind] - c_e_out
+            ):
+                return False
+        else:
+            if (
+                G1_node_info.c_e_in > c_e_in
+                or G1_node_info.nc_e_in > self.G2_degrees_out[G2_node_ind] - c_e_in
+                or G1_node_info.c_e_out > c_e_out
+                or G1_node_info.nc_e_out > self.G2_degrees_in[G2_node_ind] - c_e_out
+            ):
+                return False
+        #
+        return super()._feasibility(
+            G1_node_ind, G1_node, G2_node_ind, G2_node, G1_node_info, G2_node_info
+        )
+
+    def reset_node_view(self):
+        self.G1 = None
+        self.G1 = self.G1_o
+        self.G1_o = None
+        #
+        self.G2 = None
+        self.G2 = self.G2_o
+        self.G2_o = None
+
+    def isomorphisms_iter(self):
+        yield from super().isomorphisms_iter()
+        self.reset_node_view()
+
+    def subgraph_isomorphisms_iter(self):
+        yield from super().subgraph_isomorphisms_iter()
+        self.reset_node_view()
+
+    def subgraph_monomorphisms_iter(self):
+        yield from super().subgraph_monomorphisms_iter()
+        self.reset_node_view()
+
+
+class DiGMState(GMState):
+    """_summary_"""
+
+    def __init__(self, graph_matcher):
+        self.graph_matcher = graph_matcher
+        #
+        self.G1_sub_state = DiGMSubState(
+            self.graph_matcher.G1,
+            self.graph_matcher.G1_o,
+            self.graph_matcher.G1_nodes_ind,
+        )
+        self.G2_sub_state = DiGMSubState(
+            self.graph_matcher.G2,
+            self.graph_matcher.G2_o,
+            self.graph_matcher.G2_nodes_ind,
+        )
+        #
+        G1_size = self.graph_matcher.G1.number_of_nodes()
+        self.G1_nodes_info = [None] * G1_size
+        self.G2_nodes_info = [None] * G1_size
+        #
+        if self.graph_matcher.test == "iso" or self.graph_matcher.test == "sub-iso":
+            size_tmp = 0
+            for ind in range(G1_size):
+                size_tmp = self.graph_matcher.nodes_degMNeighMax[ind] + 1
+                self.G1_nodes_info[ind] = DiGMNodeInfo(size_tmp)
+                self.G2_nodes_info[ind] = DiGMNodeInfo(size_tmp)
+        else:
+            for ind in range(G1_size):
+                self.G1_nodes_info[ind] = DiGMNodeInfo(0)
+                self.G2_nodes_info[ind] = DiGMNodeInfo(0)
+
+    def compute_G1_node_info(self, node_info, G1_node_ind, G1_node):
+        #
+        super().compute_G1_node_info(node_info, G1_node_ind, G1_node)
+        # in
+        node_info.c_e_in = self.G1_sub_state.c_e_in[G1_node_ind]
+        node_info.nc_e_in = (
+            self.graph_matcher.G1_degrees_out[G1_node_ind] - node_info.c_e_in
+        )
+        # out
+        node_info.c_e_out = self.G1_sub_state.c_e_out[G1_node_ind]
+        node_info.nc_e_out = (
+            self.graph_matcher.G1_degrees_in[G1_node_ind] - node_info.c_e_out
+        )
+
+    def compute_G2_node_info_and_syntactic_feasibility(
+        self, G1_node_ind, G1_node, G2_node_ind, G2_node, node_info
+    ):
+        return super().compute_G2_node_info_and_syntactic_feasibility(
+            G1_node_ind, G1_node, G2_node_ind, G2_node, node_info
+        )
+
+    def check_edge(
+        self,
+        G1_node,
+        G2_node,
+        G1_node_neighbors,
+        G1_neighbor,
+        G2_node_neighbors,
+        G2_neighbor,
+    ):
+        if self.graph_matcher.test != "mono":
+            return (
+                self.graph_matcher.G1_o.number_of_edges(G1_node, G1_neighbor)
+                == self.graph_matcher.G2_o.number_of_edges(G2_node, G2_neighbor)
+                and self.graph_matcher.G1_o.number_of_edges(G1_neighbor, G1_node)
+                == self.graph_matcher.G2_o.number_of_edges(G2_neighbor, G2_node)
+                and super().check_edge(
+                    G1_node,
+                    G2_node,
+                    G1_node_neighbors,
+                    G1_neighbor,
+                    G2_node_neighbors,
+                    G2_neighbor,
+                )
+            )
+        else:
+            return (
+                self.graph_matcher.G1_o.number_of_edges(G1_node, G1_neighbor)
+                <= self.graph_matcher.G2_o.number_of_edges(G2_node, G2_neighbor)
+                and self.graph_matcher.G1_o.number_of_edges(G1_neighbor, G1_node)
+                <= self.graph_matcher.G2_o.number_of_edges(G2_neighbor, G2_node)
+                and super().check_edge(
+                    G1_node,
+                    G2_node,
+                    G1_node_neighbors,
+                    G1_neighbor,
+                    G2_node_neighbors,
+                    G2_neighbor,
+                )
+            )
+
+
+class DiGMSubState(GMSubState):
+    """_summary_"""
+
+    def __init__(self, G, G_o, G_nodes_ind):
+        super().__init__(G, G_nodes_ind)
+        self.G_o = G_o
+        # Number of in edges in the mapping
+        self.c_e_in = [0] * self.G.number_of_nodes()
+        # Number of out edges in the mapping
+        self.c_e_out = [0] * self.G.number_of_nodes()
+
+    # upadate Feasibility Sets
+    def add_node(self, node_id, node):
+        neighbor_ind = 0
+        for neighbor in self.G[node]:
+            neighbor_ind = self.G_nodes_ind[neighbor]
+            self.c[neighbor_ind] += 1
+            self.c_e_out[neighbor_ind] += self.G_o.number_of_edges(node, neighbor)
+            self.c_e_in[neighbor_ind] += self.G_o.number_of_edges(neighbor, node)
+            self.c_sum[neighbor_ind] += node_id
+
+    def add_node_(self, node_id, node, t_node_id):
+        neighbor_ind = 0
+        for neighbor in self.G[node]:
+            neighbor_ind = self.G_nodes_ind[neighbor]
+            self.c[neighbor_ind] += 1
+            self.c_e_out[neighbor_ind] += self.G_o.number_of_edges(node, neighbor)
+            self.c_e_in[neighbor_ind] += self.G_o.number_of_edges(neighbor, node)
+            self.c_sum[neighbor_ind] += t_node_id
+
+    def remove_node(self, node_id, node):
+        neighbor_ind = 0
+        for neighbor in self.G[node]:
+            neighbor_ind = self.G_nodes_ind[neighbor]
+            self.c[neighbor_ind] -= 1
+            self.c_e_out[neighbor_ind] -= self.G_o.number_of_edges(node, neighbor)
+            self.c_e_in[neighbor_ind] -= self.G_o.number_of_edges(neighbor, node)
+            self.c_sum[neighbor_ind] -= node_id
+
+    def remove_node_(self, node_id, node, t_node_id):
+        neighbor_ind = 0
+        for neighbor in self.G[node]:
+            neighbor_ind = self.G_nodes_ind[neighbor]
+            self.c[neighbor_ind] -= 1
+            self.c_e_out[neighbor_ind] -= self.G_o.number_of_edges(node, neighbor)
+            self.c_e_in[neighbor_ind] -= self.G_o.number_of_edges(neighbor, node)
+            self.c_sum[neighbor_ind] -= t_node_id
+
+
+class DiGMNodeInfo(GMNodeInfo):
+    """_summary_"""
+
+    def __init__(self, size):
+        super().__init__(size)
+        # Number of in edges in the mapping
+        self.c_e_in = 0
+        # Number of out edges in the mapping
+        self.c_e_out = 0
+        # Number of in edges not in the mapping
+        self.nc_e_in = 0
+        # Number of out edges not in the mapping
+        self.nc_e_out = 0
+
+    def clear(self):
+        super().clear()
+        self.c_e_in = 0
+        self.c_e_out = 0
+        self.nc_e_in = 0
+        self.nc_e_out = 0
+
+
+"""""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """
+
+                                                            mulri-di-graph
+
+""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """"""
+
+
+class MultiDiGraphMatcher(DiGraphMatcher):
+    def __init__(self, G1, G2, node_label=None, node_match=None, edge_match=None):
+        super().__init__(G1, G2, node_label, node_match, edge_match)
