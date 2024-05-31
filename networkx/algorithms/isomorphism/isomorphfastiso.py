@@ -351,7 +351,6 @@ class GraphMatcher:
             ):
                 return False
         #
-        start_time = time.time()
         (
             self.G1_sum_neighbors_degree,
             self.G1_max_neighbors_degree,
@@ -364,8 +363,6 @@ class GraphMatcher:
         ) = self.compute_node_prop(
             self.G2, self.G2_nodes, self.G2_nodes_ind, self.G2_degrees
         )
-        search_time = time.time() - start_time
-        print(f"fastiso compute_node_prop_time {search_time}")
         #
         # node probability
         self.node_prob = [0] * G1_size
@@ -373,30 +370,20 @@ class GraphMatcher:
         self.nodes_order = None
         self.nodes_degMNeighMax = None
         #
-        start_time = time.time()
         # compute initial domain
         if not self.compute_node_probability():
             return False
-        search_time = time.time() - start_time
-        print(f"fastiso compute_initial_domain_time {search_time}")
         #
         # self.G1_max_neighbors_degree=None
         # self.G1_sum_neighbors_degree=None
         # self.G2_max_neighbors_degree=None
         # self.G2_sum_neighbors_degree=None
-        start_time = time.time()
         # compute node ordoring
         self.compute_node_ordoring()
-        search_time = time.time() - start_time
-        print(f"fastiso compute_node_ordoring_time {search_time}")
-        # print(self.parents)
         #
         self.node_prob = None
-        start_time = time.time()
         # initialize state
         self.initialize_sate()
-        search_time = time.time() - start_time
-        print(f"fastiso state_time {search_time}")
         # self.nodes_degMNeighMax=None
         # matching
         return True
@@ -1332,13 +1319,29 @@ class DiGraphMatcher(GraphMatcher):
         )
 
     def reset_node_view(self):
-        self.G1 = None
-        self.G1 = self.G1_o
-        self.G1_o = None
-        #
-        self.G2 = None
-        self.G2 = self.G2_o
-        self.G2_o = None
+        if self.G1_o != None:
+            self.G1 = None
+            self.G1 = self.G1_o
+            self.G1_o = None
+            #
+            self.G2 = None
+            self.G2 = self.G2_o
+            self.G2_o = None
+
+    def is_isomorphic(self):
+        result = super().is_isomorphic()
+        self.reset_node_view()
+        return result
+
+    def subgraph_is_isomorphic(self):
+        result = super().subgraph_is_isomorphic()
+        self.reset_node_view()
+        return result
+
+    def subgraph_is_monomorphic(self):
+        result = super().subgraph_is_monomorphic()
+        self.reset_node_view()
+        return result
 
     def isomorphisms_iter(self):
         yield from super().isomorphisms_iter()
