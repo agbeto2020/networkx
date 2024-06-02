@@ -204,7 +204,7 @@ for name, generator in benchmarkx.items():
     vf2pp_time=[]
     sizes=[]
     #
-    for size in range(500, 2000, 500):
+    for size in range(500, 10500, 500):
         G1 = generator(size)
         G2 = generate_shuffled_graph(G1)
         
