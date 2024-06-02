@@ -105,7 +105,11 @@ class NodeCommand:
 
         while n < size:
             if len(self.candidates) != 0:
-                if self.graph_matcher.labelled:
+                if (
+                    self.graph_matcher.test == "iso2"
+                    or self.graph_matcher.test == "sub-iso2"
+                    or self.graph_matcher.test == "mono2"
+                ):
                     selected_no = min(
                         self.candidates,
                         key=lambda k: (
@@ -1181,9 +1185,9 @@ class MultiGMState(GMState):
                 G1_neighbor in G1_node_neighbors
                 and len(G1_node_neighbors[G1_neighbor])
                 == len(G2_node_neighbors[G2_neighbor])
-                and super().check_edge(
-                    G1_node,
-                    G2_node,
+                and self.graph_matcher.compare_edge_attr(
+                    # G1_node,
+                    # G2_node,
                     G1_node_neighbors,
                     G1_neighbor,
                     G2_node_neighbors,
@@ -1195,9 +1199,9 @@ class MultiGMState(GMState):
                 G2_neighbor in G2_node_neighbors
                 and len(G1_node_neighbors[G1_neighbor])
                 <= len(G2_node_neighbors[G2_neighbor])
-                and super().check_edge(
-                    G1_node,
-                    G2_node,
+                and self.graph_matcher.compare_edge_attr(
+                    # G1_node,
+                    # G2_node,
                     G1_node_neighbors,
                     G1_neighbor,
                     G2_node_neighbors,
