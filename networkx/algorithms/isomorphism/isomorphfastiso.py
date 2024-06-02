@@ -1177,30 +1177,32 @@ class MultiGMState(GMState):
         G2_neighbor,
     ):
         if self.graph_matcher.test != "mono":
-            return self.graph_matcher.G1.number_of_edges(
-                G1_node, G1_neighbor
-            ) == self.graph_matcher.G2.number_of_edges(
-                G2_node, G2_neighbor
-            ) and super().check_edge(
-                G1_node,
-                G2_node,
-                G1_node_neighbors,
-                G1_neighbor,
-                G2_node_neighbors,
-                G2_neighbor,
+            return (
+                G1_neighbor in G1_node_neighbors
+                and len(G1_node_neighbors[G1_neighbor])
+                == len(G2_node_neighbors[G2_neighbor])
+                and super().check_edge(
+                    G1_node,
+                    G2_node,
+                    G1_node_neighbors,
+                    G1_neighbor,
+                    G2_node_neighbors,
+                    G2_neighbor,
+                )
             )
         else:
-            return self.graph_matcher.G1.number_of_edges(
-                G1_node, G1_neighbor
-            ) <= self.graph_matcher.G2.number_of_edges(
-                G2_node, G2_neighbor
-            ) and super().check_edge(
-                G1_node,
-                G2_node,
-                G1_node_neighbors,
-                G1_neighbor,
-                G2_node_neighbors,
-                G2_neighbor,
+            return (
+                G2_neighbor in G2_node_neighbors
+                and len(G1_node_neighbors[G1_neighbor])
+                <= len(G2_node_neighbors[G2_neighbor])
+                and super().check_edge(
+                    G1_node,
+                    G2_node,
+                    G1_node_neighbors,
+                    G1_neighbor,
+                    G2_node_neighbors,
+                    G2_neighbor,
+                )
             )
 
 
