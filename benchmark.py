@@ -2,6 +2,7 @@ from networkx.algorithms.isomorphism.isomorphfastiso import GraphMatcher as FIGr
 from networkx.algorithms.isomorphism.isomorphfastiso import DiGraphMatcher as FIDiGraphMatcher
 from networkx.algorithms.isomorphism import GraphMatcher as nxGraphMatcher
 from networkx.algorithms.isomorphism import DiGraphMatcher as nxDiGraphMatcher
+from itertools import product
 import networkx as nx
 import time
 from memory_profiler import profile
@@ -10,6 +11,8 @@ import threading
 import multiprocessing
 import csv
 import random
+from timeoutpool import TimeoutPool
+import pickle
     
 #
 def generate_erdos_renyi_graph(n, p=0.1, directed=False):
@@ -72,104 +75,67 @@ def generate_powerlaw_graph(n, exponent=2.5):
     """_summary_"""
     return nx.powerlaw_cluster_graph(n, 3, 0.1)
 
-def fast_iso(G1,G2,result):
-    start_time = time.time()
-    if G1.is_directed():
-        GM = FIDiGraphMatcher(G2, G1)
-    else:
-        GM = FIGraphMatcher(G2, G1)
-    iso_count = len(list(GM.isomorphisms_iter()))
-    duration = time.time() - start_time
-    result["duration"]=duration
-    result["iso_count"]=iso_count
+def fast_iso(G1,G2):
+    def _fast_iso(G1, G2, result):
+        start_time = time.time()
+        if G1.is_directed():
+            GM = FIDiGraphMatcher(G2, G1)
+        else:
+            GM = FIGraphMatcher(G2, G1)
+        iso_count = len(list(GM.isomorphisms_iter()))
+        duration = time.time() - start_time
+        result["duration"]=duration
+        result["iso_count"]=iso_count
     
-def vf2(G1,G2,result):
-    start_time = time.time()
-    if G1.is_directed():
-        GM = nxDiGraphMatcher(G2, G1)
-    else:
-        GM = nxGraphMatcher(G2, G1)
-    iso_count = len(list(GM.isomorphisms_iter()))
-    duration = time.time() - start_time
-    result["duration"]=duration
-    result["iso_count"]=iso_count
+    result = {}
+    mem_usage = memory_usage((_fast_iso, (G1,G2,result)),) #max_iterations=1
+    memory = max(mem_usage) - min(mem_usage)
+    return memory, result['duration'], result['iso_count']
     
-def vf2pp(G1,G2,result):
-    start_time = time.time()
-    iso_count = len(list(nx.vf2pp_all_isomorphisms(G2, G1, node_label=None)))
-    duration = time.time() - start_time
-    result["duration"]=duration
-    result["iso_count"]=iso_count
     
-
-def measure_fast_iso(G1,G2,result):
-    #start_time = time.time()
-    mem_usage = memory_usage((fast_iso, (G1,G2,result)),) #max_iterations=1
-    #duration = time.time() - start_time
-    result["memory"]=max(mem_usage) - min(mem_usage)
     
-def measure_vf2pp(G1,G2,result):
-    #start_time = time.time()
-    mem_usage = memory_usage((vf2pp, (G1,G2,result)),) #max_iterations=1
-    #duration = time.time() - start_time
-    result["memory"]=max(mem_usage) - min(mem_usage)
+def vf2(G1,G2):
+    def _vf2(G1, G2, result):
+        start_time = time.time()
+        if G1.is_directed():
+            GM = nxDiGraphMatcher(G2, G1)
+        else:
+            GM = nxGraphMatcher(G2, G1)
+        iso_count = len(list(GM.isomorphisms_iter()))
+        duration = time.time() - start_time
+        result["duration"]=duration
+        result["iso_count"]=iso_count
+    result = {}
+    mem_usage = memory_usage((_vf2, (G1,G2,result)),) #max_iterations=1
+    memory = max(mem_usage) - min(mem_usage)
+    return memory, result['duration'], result['iso_count']
     
-def measure_vf2(G1,G2,result):
-    #start_time = time.time()
-    mem_usage = memory_usage((vf2, (G1,G2,result)),) #max_iterations=1
-    #duration = time.time() - start_time
-    result["memory"]=max(mem_usage) - min(mem_usage)
     
-
-def compare_fast_iso(G1,G2,result,timeout_duration):
-    process = multiprocessing.Process(target=measure_fast_iso,args=(G1,G2,result,))
-    process.start()
-    process.join(timeout_duration)  
-
-    if process.is_alive():
-        result["duration"]=timeout_duration
-        result["memory"]=0
-        result["iso_count"]=0
-        process.terminate()
-
-    return result
-
-def compare_vf2(G1,G2,result,timeout_duration):
-    process = multiprocessing.Process(target=measure_vf2,args=(G1,G2,result,))
-    process.start()
-    process.join(timeout_duration)
-
-    if process.is_alive():
-        result["duration"]=timeout_duration
-        result["memory"]=0
-        result["iso_count"]=0
-        process.terminate()
-
-    return result
-
-def compare_vf2pp(G1,G2,result,timeout_duration):
-    process = multiprocessing.Process(target=measure_vf2pp,args=(G1,G2,result,))
-    process.start()
-    process.join(timeout_duration)
-
-    if process.is_alive():
-        result["duration"]=timeout_duration
-        result["memory"]=0
-        result["iso_count"]=0
-        process.terminate()
-
-    return result
-
-def save_file(file_name,_size,_memory,_time):
-    with open(file_name, mode='w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow(["Size", "Memory", "Time"])
-        for size, mem, time in zip(_size,_memory,_time):
-            writer.writerow([size, mem, time])
     
+def vf2pp(G1,G2):
+    def _vf2pp(G1, G2, result):
+        start_time = time.time()
+        iso_count = len(list(nx.vf2pp_all_isomorphisms(G2, G1, node_label=None)))
+        duration = time.time() - start_time
+        result["duration"]=duration
+        result["iso_count"]=iso_count
+    result = {}
+    mem_usage = memory_usage((_vf2pp, (G1,G2,result)),) #max_iterations=1
+    memory = max(mem_usage) - min(mem_usage)
+    return memory, result['duration'], result['iso_count']
+
+
+def generate_shuffled_graph(G):
+    nodes = list(G.nodes)
+    random.shuffle(nodes)
+    mapping = {old_label: new_label for old_label, new_label in zip(G.nodes, nodes)}
+    return nx.relabel_nodes(G, mapping)
+#
+
+
 
 #benchmatk
-benchmarkx = {
+BENCHMARKS = {
     "path_graph":nx.path_graph,
     "cycle_graph":nx.cycle_graph,
     "path_graph":nx.path_graph,
@@ -180,48 +146,33 @@ benchmarkx = {
     "Random_Regular":generate_random_regular_graph,
     "Powerlaw":generate_powerlaw_graph
     }
+ALGOS = {
+    'fast_iso':fast_iso,
+    'vf2':vf2,
+    'vf2pp':vf2pp
+}
+TIMEOUT=3600#1H
+NB_PROCS=4
 
-def generate_shuffled_graph(G):
-    nodes = list(G.nodes)
-    random.shuffle(nodes)
-    mapping = {old_label: new_label for old_label, new_label in zip(G.nodes, nodes)}
-    return nx.relabel_nodes(G, mapping)
-#
-timeout_duration=3600#1H
-result = multiprocessing.Manager().dict()
+def do_work(algo, benchmark, size):
+    G1 = BENCHMARKS[benchmark](size)
+    G2 = generate_shuffled_graph(G1)
+    memory, duration, iso_count = ALGOS[algo](G1, G2)
 
-# Parcourir les benchmarks et comparer les algorithmes
-for name, generator in benchmarkx.items():
-    print(f"Testing {name} graph...")
-    #
-    fastiso_memory=[]
-    fastiso_time=[]
-    #
-    vf2_memory=[]
-    vf2_time=[]
-    #
-    vf2pp_memory=[]
-    vf2pp_time=[]
-    sizes=[]
-    #
-    for size in range(500, 10500, 500):
-        G1 = generator(size)
-        G2 = generate_shuffled_graph(G1)
-        
-        compare_vf2(G1, G2, result,timeout_duration)
-        vf2_memory.append(result["memory"])
-        vf2_time.append(result["duration"])
-        
-        compare_vf2pp(G1,G2,result,timeout_duration)
-        vf2pp_memory.append(result["memory"])
-        vf2pp_time.append(result["duration"])
-        
-        compare_fast_iso(G1,G2,result,timeout_duration)
-        fastiso_memory.append(result["memory"])
-        fastiso_time.append(result["duration"])
-        
-        sizes.append(size)
-    ##
-    save_file(name+"_fastiso_results.csv", sizes, fastiso_memory, fastiso_time)
-    save_file(name+"_vf2_results.csv", sizes, vf2_memory, vf2_time)
-    save_file(name+"_vf2pp_results.csv", sizes, vf2pp_memory, vf2pp_time)
+    return memory, duration, iso_count, algo, benchmark, size
+
+
+def main():
+    todo = product(ALGOS, BENCHMARKS, range(500, 10500, 500))
+
+    tpool = TimeoutPool(n_jobs=NB_PROCS, timeout=TIMEOUT)
+    results = tpool.apply(do_work, todo)
+
+    with open('dump.pickle', 'wb') as f:
+        pickle.dump(results, f)
+
+
+
+if __name__ == '__main__':
+    main()
+
