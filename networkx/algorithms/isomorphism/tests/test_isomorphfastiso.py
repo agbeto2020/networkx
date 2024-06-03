@@ -61,8 +61,10 @@ class TestWikipediaExample:
         g2.add_edges_from(self.g2edges)
         gm = GraphMatcher(g1, g2)
         assert gm.is_isomorphic()
+        assert gm.is_isomorphic_2()
         # Just testing some cases
         assert gm.subgraph_is_monomorphic()
+        assert gm.subgraph_is_monomorphic_2()
 
         mapping = sorted(gm.mapping.items())
 
@@ -80,6 +82,7 @@ class TestWikipediaExample:
         g3 = g2.subgraph([1, 2, 3, 4])
         gm = GraphMatcher(g1, g3)
         assert gm.subgraph_is_isomorphic()
+        assert gm.subgraph_is_isomorphic_2()
 
     def test_subgraph_mono(self):
         g1 = nx.Graph()
@@ -88,6 +91,7 @@ class TestWikipediaExample:
         g2.add_edges_from([[1, 2], [2, 3], [3, 4]])
         gm = GraphMatcher(g1, g2)
         assert gm.subgraph_is_monomorphic()
+        assert gm.subgraph_is_monomorphic_2()
 
 
 class TestVF2GraphDB:
@@ -130,6 +134,7 @@ class TestVF2GraphDB:
         g2 = self.create_graph(head / "iso_r01_s80.B99")
         gm = GraphMatcher(g1, g2)
         assert gm.is_isomorphic()
+        assert gm.is_isomorphic_2()
 
     def test_subgraph(self):
         # A is the subgraph
@@ -139,8 +144,10 @@ class TestVF2GraphDB:
         graph = self.create_graph(head / "si2_b06_m200.B99")
         gm = GraphMatcher(graph, subgraph)
         assert gm.subgraph_is_isomorphic()
+        assert gm.subgraph_is_isomorphic_2()
         # Just testing some cases
         assert gm.subgraph_is_monomorphic()
+        assert gm.subgraph_is_monomorphic_2()
 
     # There isn't a similar test implemented for subgraph monomorphism,
     # feel free to create one.
@@ -218,8 +225,10 @@ def test_multiedge():
             else:
                 gm = MultiDiGraphMatcher(g1, g2)
             assert gm.is_isomorphic()
+            assert gm.is_isomorphic_2()
             # Testing if monomorphism works in multigraphs
             assert gm.subgraph_is_monomorphic()
+            assert gm.subgraph_is_monomorphic_2()
 
 
 def test_selfloop():
@@ -251,6 +260,7 @@ def test_selfloop():
             else:
                 gm = DiGraphMatcher(g1, g2)
             assert gm.is_isomorphic()
+            assert gm.is_isomorphic_2()
 
 
 def test_selfloop_mono():
@@ -283,6 +293,7 @@ def test_selfloop_mono():
             else:
                 gm = DiGraphMatcher(g2, g1)
             assert not gm.subgraph_is_monomorphic()
+            assert not gm.subgraph_is_monomorphic_2()
 
 
 def test_isomorphism_iter1():
@@ -298,7 +309,7 @@ def test_isomorphism_iter1():
     gm12 = DiGraphMatcher(g1, g2)
     gm13 = DiGraphMatcher(g1, g3)
     x = list(gm12.subgraph_isomorphisms_iter())
-    y = list(gm13.subgraph_isomorphisms_iter())
+    y = list(gm13.subgraph_isomorphisms_iter_2())
     assert {"A": "Y", "B": "Z"} in x
     assert {"B": "Y", "C": "Z"} in x
     assert {"A": "Z", "B": "Y"} in y
@@ -324,6 +335,7 @@ def test_monomorphism_iter1():
     gm21 = DiGraphMatcher(g2, g1)
     # Check if StopIteration exception returns False
     assert not gm21.subgraph_is_monomorphic()
+    assert not gm21.subgraph_is_monomorphic_2()
 
 
 def test_isomorphism_iter2():
@@ -417,3 +429,4 @@ def test_monomorphism_edge_match():
 
     gm = MyDiGraphMatcher(G, SG, edge_match=iso.categorical_edge_match("label", None))
     assert gm.subgraph_is_monomorphic()
+    assert gm.subgraph_is_monomorphic_2()
