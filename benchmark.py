@@ -1,7 +1,6 @@
 import time
 from itertools import product
 import multiprocessing
-import random
 import pickle
 
 
@@ -15,7 +14,10 @@ from networkx.algorithms.isomorphism.isomorphfastiso import DiGraphMatcher as FI
 from networkx.algorithms.isomorphism import GraphMatcher as nxGraphMatcher
 from networkx.algorithms.isomorphism import DiGraphMatcher as nxDiGraphMatcher
 import networkx as nx
-    
+import random
+#
+SEED=12
+random.seed(12)    
 #
 def generate_erdos_renyi_graph(n, p=0.1, directed=False):
     """
@@ -52,7 +54,7 @@ def generate_watts_strogatz_graph(n, k=10, p=0.1):
     """
     return nx.watts_strogatz_graph(n, k, p)
 
-def generate_random_bipartite_graph(n, m, p=0.1):
+def generate_random_bipartite_graph(n, m=0, p=0.1):
     """
         Generates a random bipartite graph.
 
@@ -61,6 +63,8 @@ def generate_random_bipartite_graph(n, m, p=0.1):
         m (int): The number of nodes in the second partition.
         p (float): The probability for each pair of nodes (one from each partition) to be connected by an edge.
     """
+    n=n//2
+    m=n
     return nx.bipartite.random_graph(n, m, p)
 
 def generate_random_regular_graph(n, d=100):
@@ -166,7 +170,7 @@ def do_work(algo_benchmark_size):
 
 
 def main():
-    todo = product(ALGOS, BENCHMARKS, range(500, 501, 15))
+    todo = product(ALGOS, BENCHMARKS, range(500, 10500, 500))
 
 
     tpool = TimeoutPool(n_jobs=NB_PROCS, timeout=TIMEOUT)
