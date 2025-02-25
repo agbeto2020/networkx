@@ -6,12 +6,39 @@ __all__ = ["GraphMatcher", "DiGraphMatcher", "MultiGraphMatcher", "MultiDiGraphM
 """_summary_
 definitions : 
 - Number of neighbors: This is the number of distinct nodes to which a node is connected by one or more edges.
-- Number of edges (degree): This is the total number of edges connected to a node, including multiple edges.
+- Number of edges: This is the total number of edges connected to a node, including multiple edges.
 
 let G is a simple graph, and n, node in G :
 Number_of_neighbors(n) equal to Number_of_edges(n)
 if G is a multi-graph Number_of_neighbors(n) not necessacary equal to Number_of_edges(n)
 Number_of_neighbors(n) <= Number_of_edges(n)
+"""
+
+"""
+*****************
+FASTiso Algorithm
+*****************
+
+An implementation of the FASTiso algorithm [1]_ for Graph Isomorphism testing.
+
+Introduction
+------------
+
+The classes GraphMatcher, MultiGraphMatcher, DiGraphMatcher, and MultiDiGraphMatcher 
+handle the mapping between undirected graphs, multigraphs, directed graphs, 
+and directed multigraphs, respectively. It is possible to test graph isomorphism, 
+non-induced graph isomorphism, and monomorphism (non-induced graph isomorphism).  
+
+Some heuristics for computing the order of variables are not effective on path graphs.
+Therefore, when working with this type of graph, it is recommended to set 
+the parameter path_graph=True to avoid using these heuristics.  
+
+To handle attributes on nodes and edges, the parameters node_match and edge_match 
+must be defined.
+
+
+References
+----------
 """
 
 """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """
@@ -21,7 +48,7 @@ Number_of_neighbors(n) <= Number_of_edges(n)
 """ """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """""" """"""
 
 
-class NodeOrdoringProp:
+class NodeOrderingProp:
     """Class representing the properties used for node ordering in graph matching.
 
     Attributes:
@@ -45,16 +72,16 @@ class NodeOrdoringProp:
         self.deg = deg_
         self.degNeigh = 0
         self.degM = 0
-        self.degMNeigh = 0
+        self.degMNeigh = 0  # not use for path graph
         self.degMNeighMax = 0
-        self.degMo = degMo_
+        self.degMo = degMo_  # not use for path graph
         self.present = 0
         self.candidate = 0
 
 
 class NodeCommand:
     """
-    Compute the node matching order using attributes of the NodeOrdoringProp class.
+    Computes the node odering using attributes of the NodeOrderingProp class.
     """
 
     def __init__(
@@ -63,8 +90,52 @@ class NodeCommand:
         pass
 
     #
-    def compute_node_ordoring(self, graph_matcher):
-        """Computes the node ordering for graph matching.
+    def update_degMNeigh_and_degMo(self, no):
+        if self.graph_matcher.path_graph == True:
+            return
+        node = no.node
+        for neighbor in self.graph_matcher.G1.neighbors(node):
+            neighbor_ind = self.graph_matcher.G1_nodes_ind[neighbor]
+            no_neigh = self.nodes[neighbor_ind]
+            if no_neigh.present == 0:
+                no_neigh.degMo -= 1
+                no_neigh.degMNeigh += 1
+
+    #
+    def update_no(self, no):
+        """Marks a node as present and updates its neighbors' properties.
+
+        Parameters:
+            no: NodeOrderingProp corresponding to the node to be updated.
+        """
+        no.present = 1
+        no.candidate = 1
+        no.degM = 0
+        node = no.node
+        #
+        for neighbor in self.graph_matcher.G1.neighbors(node):
+            neighbor_ind = self.graph_matcher.G1_nodes_ind[neighbor]
+            no_neigh = self.nodes[neighbor_ind]
+            #
+            if no.degMNeighMax < no_neigh.degM:
+                no.degMNeighMax = no_neigh.degM
+            #
+            if no_neigh.present == 0:
+                no_neigh.degM += 1
+                no_neigh.degNeigh += len(self.graph_matcher.G1[node][neighbor])
+                # no need DegNeigh for undirect graph
+            if no_neigh.candidate == 0:
+                self.update_degMNeigh_and_degMo(no_neigh)
+                no_neigh.candidate = 1
+                self.candidates.append(no_neigh)
+                self.parents[no_neigh.id] = no.id
+
+        # We remove the selected node from the list of candidates.
+        self.candidates = [no for no in self.candidates if no.present == 0]
+
+    #
+    def compute_variable_ordering(self, graph_matcher):
+        """Computes the node ordering.
 
         Parameters:
             graph_matcher.
@@ -78,148 +149,108 @@ class NodeCommand:
         self.nodes_order = [-1] * size
         self.nodes_degMNeighMax = [0] * size
         #
+        path_graph = self.graph_matcher.path_graph
+        # Create NodeOrderingProp class for each node.
         for ind, node in enumerate(self.graph_matcher.G1_nodes):
-            # node = self.graph_matcher.G1_nodes[ind]
-            no = NodeOrdoringProp(
+            no = NodeOrderingProp(
                 ind,
                 node,
                 self.graph_matcher.node_prob[ind],
                 self.graph_matcher.G1_degrees[ind],
-                len(self.graph_matcher.G1[node]),
+                len(self.graph_matcher.G1[node]) if path_graph == False else 0,
             )
             self.nodes[ind] = no
-        ##select first node
+        ##Select first node
         selected_no = None
         n = 0
+        # Selection of the first
         if self.graph_matcher.labelled:
             selected_no = min(self.nodes, key=lambda obj: obj.prob)
         else:
             selected_no = min(self.nodes, key=lambda obj: -obj.deg)
         #
+        self.update_no(selected_no)
         self.nodes_order[n] = selected_no.id
         self.nodes_degMNeighMax[n] = selected_no.degMNeighMax
         self.parents[selected_no.id] = None
-        #
-        self.update_no(selected_no)
         n += 1
 
         while n < size:
             if len(self.candidates) != 0:
-                if (
-                    self.graph_matcher.test == "iso2"
-                    or self.graph_matcher.test == "sub-iso2"
-                    or self.graph_matcher.test == "mono2"
-                ):
-                    selected_no = min(
-                        self.candidates,
-                        key=lambda k: (
-                            -k.degM,
-                            -k.degNeigh,  # not used for undirect graph
-                            -k.degMNeigh,
-                            -k.degMo,
-                            k.prob,
-                            -k.deg,
-                        ),
-                    )
-                else:
-                    selected_no = min(
-                        self.candidates,
-                        key=lambda k: (
-                            -k.degM,
-                            -k.degNeigh,  # not used for undirect graph
-                            # -k.degMNeigh,
-                            # -k.degMo,
-                            k.prob,
-                            -k.deg,
-                        ),
-                    )
-            # node which don't have neighbor
+                selected_no = min(
+                    self.candidates,
+                    key=lambda k: (
+                        -k.degM,
+                        -k.degNeigh,  # Not used for undirect graph
+                        -k.degMNeigh,
+                        -k.degMo,
+                        k.prob,
+                        -k.deg,
+                    ),
+                )
+            # Node which don't have neighbor
             else:
                 selected_no = min(self.nodes, key=lambda k: k.present)
             #
+            self.update_no(selected_no)
             self.nodes_order[n] = selected_no.id
             self.nodes_degMNeighMax[n] = selected_no.degMNeighMax
-            #
-            self.update_no(selected_no)
             n += 1
-
-    def update_degMNeigh_and_degMo(self, no):
-        if (
-            self.graph_matcher.test == "iso"
-            or self.graph_matcher.test == "sub-iso"
-            or self.graph_matcher.test == "mono"
-        ):
-            return
-        node = no.node
-        degM = no.degM - 1
-        for neighbor in self.graph_matcher.G1.neighbors(node):
-            neighbor_ind = self.graph_matcher.G1_nodes_ind[neighbor]
-            no_neigh = self.nodes[neighbor_ind]
-            if no_neigh.present == 0:
-                if degM == 0:
-                    no_neigh.degMo -= 1
-                else:
-                    no_neigh.degMNeigh += 1
-                #
-                if no.degM > no_neigh.degMNeighMax:
-                    no_neigh.degMNeighMax = no.degM
-
-    def update_no(self, no):
-        """Marks a node as present and updates its neighbors' properties.
-
-        Parameters:
-            no: NodeOrdoringProp corresponding to the node to be updated.
-        """
-        no.present = 1
-        no.candidate = 1
-        no.degM = 0
-        node = no.node
-        #
-        for neighbor in self.graph_matcher.G1.neighbors(node):
-            neighbor_ind = self.graph_matcher.G1_nodes_ind[neighbor]
-            no_neigh = self.nodes[neighbor_ind]
-            if no_neigh.present == 0:
-                no_neigh.degM += 1
-                no_neigh.degNeigh += len(self.graph_matcher.G1[node][neighbor])
-                self.update_degMNeigh_and_degMo(no_neigh)
-                # no need DegNeigh for undirect graph
-            if no_neigh.candidate == 0:
-                no_neigh.candidate = 1
-                self.candidates.append(no_neigh)
-                self.parents[no_neigh.id] = no.id
-
-        #
-        self.candidates = [no for no in self.candidates if no.present == 0]
 
 
 class GraphMatcher:
     """fastiso implementation for matching undirect graphs"""
 
-    def __init__(self, G1, G2, node_label=None, node_match=None, edge_match=None):
-        """Initialize GraphMatcher.
+    def __init__(
+        self,
+        G1,
+        G2,
+        node_label=None,
+        node_match=None,
+        edge_match=None,
+        path_graph=False,
+    ):
+        """Initializes GraphMatcher.
 
         Parameters
         ----------
-        G1,G2: NetworkX Graph or MultiGraph instances.
+        G1,G2: NetworkX Graph.
            The two graphs to check for isomorphism or monomorphism.
+
+        node_label: The name of the node attribute to be used when comparing nodes.
+
+        node_natch: callable.
+           A function that returns True if the node attribute dictionary for
+           the pair of nodes (u, v) respects the isomorphism conditions.
+           The function will be called like: node_natch(G1.nodes[u],G2.nodes[v]).
+
+        edge_natch: callable.
+            A function that returns True if the edge attribute dictionary for
+            the pairs of nodes (u1, v1) in G1 and (u2, v2) in G2 respects the isomorphism conditions.
+            The function will be called like: edge_match(G1[u1][v1], G2[u2][v2]).
+
+        path_graph: bool
+            to indicate that G1 and G2 are path graphs.
 
         Examples
         --------
         To create a GraphMatcher which checks for isomorphism:
 
-        >>> from networkx.algorithms import isomorphism
+        >>> from networkx.algorithms.isomorphism.isomorphfastiso import GraphMatcher
         >>> G1 = nx.path_graph(4)
         >>> G2 = nx.path_graph(4)
-        >>> GM = isomorphism.GraphMatcher(G1, G2)
+        >>> GraphMatcher(G1, G2)
         """
         self.node_match = node_match
         self.edge_match = edge_match
         #
         self.node_label = node_label
+        # Indicates whether the graph is labeled or not.
         self.labelled = False
         if self.node_label != None:
             self.labelled == True
-        #
+        # Indicates whether is path graph or not.
+        self.path_graph = path_graph
         self.G1 = G2
         self.G2 = G1
         self.G1_nodes = list(self.G1.nodes())
@@ -229,7 +260,7 @@ class GraphMatcher:
         #
         self.G1_degrees = [self.G1.degree[node] for node in self.G1_nodes]
         self.G2_degrees = [self.G2.degree[node] for node in self.G2_nodes]
-        #
+        # for manage loops
         self.G1_self_edges = [
             self.G1.number_of_edges(node, node) for node in self.G1_nodes
         ]
@@ -256,28 +287,6 @@ class GraphMatcher:
         except StopIteration:
             return False
 
-    def is_isomorphic_2(self):
-        """Returns True if G1 and G2 are isomorphic graphs."""
-        try:
-            x = next(self.isomorphisms_iter_2())
-            return True
-        except StopIteration:
-            return False
-
-    def isomorphisms_iter(self):
-        """Generator over isomorphisms between G1 and G2."""
-        # Declare that we are looking for a graph-graph isomorphism.
-        self.test = "iso"
-        if self.initialize():
-            yield from self.match(0)
-
-    def isomorphisms_iter_2(self):
-        """Generator over isomorphisms between G1 and G2."""
-        # Declare that we are looking for a graph-graph isomorphism.
-        self.test = "iso2"
-        if self.initialize():
-            yield from self.match(0)
-
     def subgraph_is_isomorphic(self):
         """Returns True if a subgraph of G1 is isomorphic to G2."""
         try:
@@ -286,10 +295,10 @@ class GraphMatcher:
         except StopIteration:
             return False
 
-    def subgraph_is_isomorphic_2(self):
+    def subgraph_is_isomorphic_M(self):
         """Returns True if a subgraph of G1 is isomorphic to G2."""
         try:
-            x = next(self.subgraph_isomorphisms_iter_2())
+            x = next(self.subgraph_isomorphisms_iter_M())
             return True
         except StopIteration:
             return False
@@ -302,13 +311,13 @@ class GraphMatcher:
         except StopIteration:
             return False
 
-    def subgraph_is_monomorphic_2(self):
-        """Returns True if a subgraph of G1 is monomorphic to G2."""
-        try:
-            x = next(self.subgraph_monomorphisms_iter_2())
-            return True
-        except StopIteration:
-            return False
+    ##
+    def isomorphisms_iter(self):
+        """Generator over isomorphisms between G1 and G2."""
+        # Declare that we are looking for a graph-graph isomorphism.
+        self.test = "iso"
+        if self.initialize():
+            yield from self.match(0)
 
     def subgraph_isomorphisms_iter(self):
         """Generator over isomorphisms between a subgraph of G1 and G2."""
@@ -317,10 +326,10 @@ class GraphMatcher:
         if self.initialize():
             yield from self.match(0)
 
-    def subgraph_isomorphisms_iter_2(self):
+    def subgraph_isomorphisms_iter_M(self):
         """Generator over isomorphisms between a subgraph of G1 and G2."""
         # Declare that we are looking for graph-subgraph isomorphism.
-        self.test = "sub-iso2"
+        self.test = "sub-isoM"
         if self.initialize():
             yield from self.match(0)
 
@@ -331,21 +340,27 @@ class GraphMatcher:
         if self.initialize():
             yield from self.match(0)
 
-    def subgraph_monomorphisms_iter_2(self):
-        """Generator over monomorphisms between a subgraph of G1 and G2."""
-        # Declare that we are looking for graph-subgraph monomorphism.
-        self.test = "mono2"
-        if self.initialize():
-            yield from self.match(0)
-
     def match(self, k=0):
+        """Extends isomorphism mapping.
+
+        This function is called recursively to determine
+        if there is a matching between G1 and G2.
+
+        Parameters
+            k (int): the level of the search tree
+        """
         if k == self.G1.number_of_nodes():
             self.mapping = self.state.copy_mapping()
             yield self.mapping
         else:
+            # The k-th node in the variable ordering.
             G1_node_ind = self.nodes_order[k]
             G1_node = self.G1_nodes[G1_node_ind]
-            #
+            # The candidate nodes that will be mapped to G1_node
+            # are chosen from among the neighbors
+            # of the node corresponding to the parent of G1_node
+            # if G1_node does not have a parent, the set of candidates
+            # is the set of all nodes in the target graph.
             domain = None
             parent_id = self.parents[G1_node_ind]
             if parent_id == None:
@@ -354,13 +369,14 @@ class GraphMatcher:
                 parent_id = self.state.G1_sub_state.m[parent_id]
                 parent_node = self.G2_nodes[parent_id]
                 domain = self.G2[parent_node]
-            #
+            # Get the nodeInfo object for the current node pair
             G1_node_info = self.state.G1_nodes_info[k]
             G2_node_info = self.state.G2_nodes_info[k]
-            #
+            # The information on the feasibility sets is calculated
+            # only 1 time for each node of the pattern graph.
             if not G1_node_info.also_do:
                 self.state.compute_G1_node_info(G1_node_info, G1_node_ind, G1_node)
-                self.state.G1_sub_state.add_node(G1_node_ind, G1_node)
+                self.state.G1_sub_state.add_G1_node(G1_node_ind, G1_node)
             #
             G2_node_ind = 0
             for G2_node in domain:
@@ -383,14 +399,19 @@ class GraphMatcher:
                     G2_node_info.clear()
 
     def initialize_sate(self):
+        """(Re)Initializes the state of GraphMatcher."""
         self.state = GMState(self)
 
     def initialize(self):
-        """_summary_"""
+        """ "Initializes (Reinitializes) the state of the algorithm
+
+        This function also does some fast checks on the existence
+        of isomorphism before initializing the state of the algorithm.
+        """
         G1_size = self.G1.number_of_nodes()
         G2_size = self.G2.number_of_nodes()
         # fast check
-        if self.test == "iso" or self.test == "iso2":
+        if self.test == "iso":
             if self.G1.order() != self.G2.order():
                 return False
             if sorted(self.G1_degrees) != sorted(self.G2_degrees):
@@ -411,13 +432,13 @@ class GraphMatcher:
         (
             self.G1_sum_neighbors_degree,
             self.G1_max_neighbors_degree,
-        ) = self.compute_node_prop(
+        ) = self.compute_nodes_prop(
             self.G1, self.G1_nodes, self.G1_nodes_ind, self.G1_degrees
         )
         (
             self.G2_sum_neighbors_degree,
             self.G2_max_neighbors_degree,
-        ) = self.compute_node_prop(
+        ) = self.compute_nodes_prop(
             self.G2, self.G2_nodes, self.G2_nodes_ind, self.G2_degrees
         )
         #
@@ -427,26 +448,23 @@ class GraphMatcher:
         self.nodes_order = None
         self.nodes_degMNeighMax = None
         #
-        # compute initial domain
+        # compute node_probability
         if not self.compute_node_probability():
             return False
         # compute node ordoring
-        self.compute_node_ordoring()
+        self.compute_variable_ordering()
         #
         self.node_prob = None
-        if self.test == "mono2":
-            self.test = "mono"
-        # initialize state
+
+        # Initialize state
         self.initialize_sate()
-        # reset degMNeighMax
+        # Reset degMNeighMax
         self.nodes_degMNeighMax = None
         return True
 
-    def compute_node_prop(self, G, G_nodes, G_nodes_ind, G_degrees):
-        """_summary_
-
-        Args:
-            sel (_type_): _description_
+    def compute_nodes_prop(self, G, G_nodes, G_nodes_ind, G_degrees):
+        """calculates some invariant on the nodes which will be used
+        to prune the search tree.
         """
         G_size = G.number_of_nodes()
         # sum of neighbors degree
@@ -470,14 +488,22 @@ class GraphMatcher:
         #
         max_degree = max(self.G2_degrees) + 1
         degree_counter = [0] * max_degree
+        sum_degree_counter = {}
         label_counter = {}
         #
         degree = 0
+        sum_degree = 0
         node_label = None
         if self.node_label != None:
             for ind, node in enumerate(self.G2_nodes):
                 degree = self.G2_degrees[ind]
                 degree_counter[degree] += 1
+                # will be use just for isomorphism
+                sum_degree = self.G2_sum_neighbors_degree[ind]
+                if sum_degree in sum_degree_counter:
+                    sum_degree_counter[sum_degree] += 1
+                else:
+                    sum_degree_counter[sum_degree] = 1
                 #
                 node_label = self.G2.nodes[node][self.node_label]
                 if node_label in label_counter:
@@ -490,18 +516,29 @@ class GraphMatcher:
             for ind, node in enumerate(self.G2_nodes):
                 degree = self.G2_degrees[ind]
                 degree_counter[degree] += 1
+                # will be use just for isomorphism
+                sum_degree = self.G2_sum_neighbors_degree[ind]
+                if sum_degree in sum_degree_counter:
+                    sum_degree_counter[sum_degree] += 1
+                else:
+                    sum_degree_counter[sum_degree] = 1
         #
         degree_counter = [x / G2_size for x in degree_counter]
         # calcul prob
         prob = 0
-        if self.test == "iso" or self.test == "iso2":
+        if self.test == "iso":
             for ind, node in enumerate(self.G1_nodes):
                 degree = self.G1_degrees[ind]
+                sum_degree = self.G1_sum_neighbors_degree[ind]
                 if self.node_label == None:
-                    prob = degree_counter[degree]
+                    prob = degree_counter[degree] * sum_degree_counter[sum_degree]
+                    # prob = degree_counter[degree]
                 else:
                     node_label = self.G1.nodes[node][self.node_label]
-                    prob == degree_counter[degree] * label_counter[node_label]
+                    prob == degree_counter[degree] * sum_degree_counter[
+                        sum_degree
+                    ] * label_counter[node_label]
+                    # prob == degree_counter[degree] * label_counter[node_label]
                 #
                 if prob == 0:
                     return False
@@ -524,19 +561,29 @@ class GraphMatcher:
         return True
 
     #
-    def compute_node_ordoring(self):
+    def compute_variable_ordering(self):
+        """Calls the NodeCommand class to compute the variable ordering."""
         no_cmd = NodeCommand()
-        no_cmd.compute_node_ordoring(self)
+        no_cmd.compute_variable_ordering(self)
         self.nodes_order = no_cmd.nodes_order
         self.parents = no_cmd.parents
+        # Maximum of the degM attribute (NodeOrderingProp) of the neighbors
+        # for each node of pattern graph.
         self.nodes_degMNeighMax = no_cmd.nodes_degMNeighMax
 
     def _feasibility(
         self, G1_node_ind, G1_node, G2_node_ind, G2_node, G1_node_info, G2_node_info
     ):
+        """check if the addition of the pair (G1_node, G2_node)
+        respects the feasibility rules.
+
+        this function first checks isomorphism conditions then
+        uses look-ahead functions to detect dead states.
+        """
         c = 0
         # nc=0
         if self.test == "iso":
+            # Begin isomorphism conditions
             c = self.state.G2_sub_state.c[G2_node_ind]
             if (
                 G1_node_info.c != c
@@ -551,53 +598,30 @@ class GraphMatcher:
             ):
                 return False
 
-            if not self.compare_node_attr(G1_node, G2_node):
+            if not self.compare_node_attr(
+                self.G1.nodes[G1_node], self.G2.nodes[G2_node]
+            ):
                 return False
+            # End isomorphism conditions
 
-            if not self.state.compute_G2_node_info_and_syntactic_feasibility(
+            # Calculates the information on G2_node that
+            # we need for the look-ahead functions
+            # and also checks the isomorphism conditions for the edges.
+            if not self.state.compute_G2_node_info_and_verify_edge_feasibility(
                 G1_node_ind, G1_node, G2_node_ind, G2_node, G2_node_info
             ):
                 return False
-            #
+            # Begin look-ahead
             if (
                 G1_node_info.num_c != G2_node_info.num_c
                 or G1_node_info.num_nc != G2_node_info.num_nc
-                or G1_node_info.DegMNeigh_sum != G2_node_info.DegMNeigh_sum
-                or G1_node_info.DegMNeigh_max != G2_node_info.DegMNeigh_max
+                or G1_node_info.c_sum_neigh != G2_node_info.c_sum_neigh
             ):
                 return False
+            # End look-ahead
 
-        elif self.test == "iso2":
-            c = self.state.G2_sub_state.c[G2_node_ind]
-            if (
-                G1_node_info.c != c
-                or G1_node_info.nc != len(self.G2[G2_node]) - c
-                or G1_node_info.c_sum != self.state.G2_sub_state.c_sum[G2_node_ind]
-                # prop
-                or self.G1_max_neighbors_degree[G1_node_ind]
-                != self.G2_max_neighbors_degree[G2_node_ind]
-                or self.G1_max_neighbors_degree[G1_node_ind]
-                != self.G2_max_neighbors_degree[G2_node_ind]
-                or self.G1_self_edges[G1_node_ind] != self.G2_self_edges[G2_node_ind]
-            ):
-                return False
-
-            if not self.compare_node_attr(G1_node, G2_node):
-                return False
-
-            if not self.state.compute_G2_node_info_and_syntactic_feasibility(
-                G1_node_ind, G1_node, G2_node_ind, G2_node, G2_node_info
-            ):
-                return False
-            #
-            if G1_node_info.num_c != G2_node_info.num_c:
-                return False
-            #
-            for ind in range(len(G1_node_info.DegMNeigh)):
-                if G1_node_info.DegMNeigh[ind] != G2_node_info.DegMNeigh[ind]:
-                    return False
-
-        elif self.test == "sub-iso2":
+        elif self.test == "sub-iso":
+            # Begin subgraph isomorphism conditions
             c = self.state.G2_sub_state.c[G2_node_ind]
             if (
                 G1_node_info.c != c
@@ -612,22 +636,30 @@ class GraphMatcher:
             ):
                 return False
 
-            if not self.compare_node_attr(G1_node, G2_node):
+            if not self.compare_node_attr(
+                self.G1.nodes[G1_node], self.G2.nodes[G2_node]
+            ):
                 return False
+            # End subgraph isomorphism conditions
 
-            if not self.state.compute_G2_node_info_and_syntactic_feasibility(
+            # Calculates the information on G2_node that
+            # we need for the look-ahead functions
+            # and also checks the subgraph isomorphism conditions for the edges.
+            if not self.state.compute_G2_node_info_and_verify_edge_feasibility(
                 G1_node_ind, G1_node, G2_node_ind, G2_node, G2_node_info
             ):
                 return False
-            #
+            # Begin look-ahead
             if G1_node_info.num_c > G2_node_info.num_c:
                 return False
             #
             for ind in range(len(G1_node_info.DegMNeigh)):
                 if G1_node_info.DegMNeigh[ind] > G2_node_info.DegMNeigh[ind]:
                     return False
+            # End look-ahead
 
-        elif self.test == "sub-iso":
+        elif self.test == "sub-isoM":
+            # Begin subgraph isomorphism conditions
             c = self.state.G2_sub_state.c[G2_node_ind]
             if (
                 G1_node_info.c != c
@@ -642,14 +674,20 @@ class GraphMatcher:
             ):
                 return False
 
-            if not self.compare_node_attr(G1_node, G2_node):
+            if not self.compare_node_attr(
+                self.G1.nodes[G1_node], self.G2.nodes[G2_node]
+            ):
                 return False
+            # End subgraph isomorphism conditions
 
-            if not self.state.compute_G2_node_info_and_syntactic_feasibility(
+            # Calculates the information on G2_node that
+            # we need for the look-ahead functions
+            # and also checks the subgraph isomorphism conditions for the edges.
+            if not self.state.compute_G2_node_info_and_verify_edge_feasibility(
                 G1_node_ind, G1_node, G2_node_ind, G2_node, G2_node_info
             ):
                 return False
-            #
+            ##Begin look-ahead
             if (
                 G1_node_info.num_c > G2_node_info.num_c
                 or G1_node_info.num_nc > G2_node_info.num_nc
@@ -657,8 +695,10 @@ class GraphMatcher:
                 or G1_node_info.DegMNeigh_max > G2_node_info.DegMNeigh_max
             ):
                 return False
+            # End look-ahead
 
         else:
+            # Begin monomorphism conditions
             c = self.state.G2_sub_state.c[G2_node_ind]
             if (
                 G1_node_info.c > c
@@ -672,43 +712,73 @@ class GraphMatcher:
             ):
                 return False
 
-            if not self.compare_node_attr(G1_node, G2_node):
+            if not self.compare_node_attr(
+                self.G1.nodes[G1_node], self.G2.nodes[G2_node]
+            ):
                 return False
+            # End monomorphism conditions
 
-            if not self.state.compute_G2_node_info_and_syntactic_feasibility(
+            # Calculates the information on G2_node that
+            # we need for the look-ahead functions
+            # and also checks the monomorphism conditions for the edges.
+            if not self.state.compute_G2_node_info_and_verify_edge_feasibility(
                 G1_node_ind, G1_node, G2_node_ind, G2_node, G2_node_info
             ):
                 return False
-            #
+            ##Begin look-ahead
             if (
                 G1_node_info.num_c > G2_node_info.num_c
                 or G1_node_info.DegMNeigh_sum > G2_node_info.DegMNeigh_sum
                 or G1_node_info.DegMNeigh_max > G2_node_info.DegMNeigh_max
             ):
                 return False
+            # End look-ahead
 
         # valid
         return True
 
-    def compare_edge_attr(
-        self, G1_node_neighbors, G1_neighbor, G2_node_neighbors, G2_neighbor
-    ):
-        # if self.edge_match != None:
-        #     return self.edge_match(
-        #         G1_node_neighbors[G1_neighbor], G2_node_neighbors[G2_neighbor]
-        #     )
-        return True
+    def compare_edge_attr(self, G1_node_edges_attrs, G2_node_edges_attrs):
+        """Calls edge_match to check if the Edge attribute dictionary for
+        the pairs of nodes (u1, v1) in G1 and (u2, v2) in G2 respects
+        the isomorphism conditions.
 
-    def compare_node_attr(self, G1_node, G2_node):
-        # if self.node_match != None:
-        #    return self.node_match(self.G1.nodes[G1_node],self.G2.nodes[G2_node])
+        Return True if this is the case, and False otherwise.
+        """
+        if self.edge_match != None:
+            return self.edge_match(G2_node_edges_attrs, G1_node_edges_attrs)
+        else:
+            return True
+
+    def compare_node_attr(self, G1_node_attrs, G2_node_attrs):
+        """Calls node_match to check if the node attribute dictionary for
+        the pair of nodes (u, v) respects the isomorphism conditions.
+
+        Return True if this is the case, and False otherwise.
+        """
+        if self.node_match != None:
+            return self.node_match(G2_node_attrs, G1_node_attrs)
+        else:
+            return True
         return True
 
 
 class GMState:
-    """Internal representation of state"""
+    """Internal representation of state for the GraphMatcher class
+
+    This function will make it possible in particular to manage
+    the state corresponding to the current mapping by adding
+    pairs of nodes (u,v).
+    It also makes it possible to calculate for (u,v) the information
+    for verifying the feasibility rules.
+
+    for performance reasons, when calculating feasibility rules information for v,
+    we check isomorphism constraints regarding edges.
+
+    u in G1, v in G2
+    """
 
     def __init__(self, graph_matcher):
+        """Initializes GMState object."""
         self.graph_matcher = graph_matcher
         #
         self.G1_sub_state = GMSubState(
@@ -722,7 +792,7 @@ class GMState:
         self.G1_nodes_info = [None] * G1_size
         self.G2_nodes_info = [None] * G1_size
         #
-        if self.graph_matcher.test == "iso2" or self.graph_matcher.test == "sub-iso2":
+        if self.graph_matcher.test == "sub-iso":
             size_tmp = 0
             for ind in range(G1_size):
                 size_tmp = self.graph_matcher.nodes_degMNeighMax[ind] + 1
@@ -743,79 +813,104 @@ class GMState:
         return mapping
 
     def add_node_pair(self, G1_node_ind, G1_node, G2_node_ind, G2_node):
+        """Adds the pair of nodes (G1_node,G2_node) to the current mapping"""
         self.G1_sub_state.m[G1_node_ind] = G2_node_ind
         self.G2_sub_state.m[G2_node_ind] = G1_node_ind
         #
-        self.G2_sub_state.add_node_(G2_node_ind, G2_node, G1_node_ind)
+        self.G2_sub_state.add_G2_node(G2_node_ind, G2_node, G1_node_ind)
 
     def remove_node_pair(self, G1_node_ind, G1_node, G2_node_ind, G2_node):
-        self.G2_sub_state.remove_node_(G2_node_ind, G2_node, G1_node_ind)
+        """Removes the pair of nodes (G1_node,G2_node) to the current mapping"""
+        self.G2_sub_state.remove_G2_node(G2_node_ind, G2_node, G1_node_ind)
         #
         self.G1_sub_state.m[G1_node_ind] = None
         self.G2_sub_state.m[G2_node_ind] = None
 
     def compute_G1_node_info(self, node_info, G1_node_ind, G1_node):
-        """Compute cutting rule informations for the node "G1_node" in G1
-
-        Args:
-            node_info (GMNodeInfo): _description_
-            G1_node_ind (int): numerical id for G1_node
-            G1_node (any): _description_
-        """
+        """Computes feasibility rules information for the node "G1_node" in G1"""
         node_info.also_do = True
+        # Number of neighbors in the mapping
         node_info.c = self.G1_sub_state.c[G1_node_ind]
+        # Number of neighbors not in the mapping
         node_info.nc = len(self.graph_matcher.G1[G1_node]) - node_info.c
         #
         #
         if self.graph_matcher.test != "mono":
+            # Sum of the IDs (numerical) of the neighbors in the mapping
             node_info.c_sum = self.G1_sub_state.c_sum[G1_node_ind]
         #
         neighbor_ind = 0
         neighbor_c = 0
-        if self.graph_matcher.test == "iso2" or self.graph_matcher.test == "sub-iso2":
+        #
+        if self.graph_matcher.test == "iso":
             for neighbor in self.G1_sub_state.G[G1_node]:
                 neighbor_ind = self.G1_sub_state.G_nodes_ind[neighbor]
-                # if neighbor not in mapping
-                if self.G1_sub_state.m[neighbor_ind] == None:
-                    node_info.DegMNeigh[self.G1_sub_state.c[neighbor_ind]] += 1
-            #
-            node_info.num_c = node_info.nc - node_info.DegMNeigh[0]
-
-        elif self.graph_matcher.test == "iso" or self.graph_matcher.test == "sub-iso":
-            for neighbor in self.G1_sub_state.G[G1_node]:
-                neighbor_ind = self.G1_sub_state.G_nodes_ind[neighbor]
-                # if neighbor not in mapping
+                # if neighbor not in the mapping
                 if self.G1_sub_state.m[neighbor_ind] == None:
                     neighbor_c = self.G1_sub_state.c[neighbor_ind]
                     #
                     if neighbor_c == 0:
+                        # Number of neighbors that do not have neighbors in the mapping
+                        node_info.num_nc += 1
+                    #
+                    node_info.c_sum_neigh += self.G1_sub_state.c_sum[neighbor_ind]
+
+            ##Number of neighbors having neighbors in the mapping
+            node_info.num_c = node_info.nc - node_info.num_nc
+
+        elif self.graph_matcher.test == "sub-iso":
+            for neighbor in self.G1_sub_state.G[G1_node]:
+                neighbor_ind = self.G1_sub_state.G_nodes_ind[neighbor]
+                # if neighbor not in the mapping
+                if self.G1_sub_state.m[neighbor_ind] == None:
+                    # Node classification
+                    node_info.DegMNeigh[self.G1_sub_state.c[neighbor_ind]] += 1
+            ##Number of neighbors having neighbors in the mapping
+            node_info.num_c = node_info.nc - node_info.DegMNeigh[0]
+
+        elif self.graph_matcher.test == "sub-isoM":
+            for neighbor in self.G1_sub_state.G[G1_node]:
+                neighbor_ind = self.G1_sub_state.G_nodes_ind[neighbor]
+                # if neighbor not in the mapping
+                if self.G1_sub_state.m[neighbor_ind] == None:
+                    neighbor_c = self.G1_sub_state.c[neighbor_ind]
+                    #
+                    if neighbor_c == 0:
+                        # Number of neighbors that do not have neighbors in the mapping
                         node_info.num_nc += 1
                     #
                     node_info.DegMNeigh_sum += neighbor_c
                     #
                     if neighbor_c > node_info.DegMNeigh_max:
                         node_info.DegMNeigh_max = neighbor_c
-            #
+
+            ##Number of neighbors having neighbors in the mapping
             node_info.num_c = node_info.nc - node_info.num_nc
 
         else:
             for neighbor in self.G1_sub_state.G[G1_node]:
                 neighbor_ind = self.G1_sub_state.G_nodes_ind[neighbor]
-                # if neighbor not in mapping
+                # if neighbor not in the mapping
                 if self.G1_sub_state.m[neighbor_ind] == None:
                     neighbor_c = self.G1_sub_state.c[neighbor_ind]
                     #
                     if neighbor_c == 0:
+                        # Number of neighbors that do not have neighbors in the mapping
                         node_info.num_nc += 1
 
                     if neighbor_c > node_info.DegMNeigh_max:
                         node_info.DegMNeigh_max = neighbor_c
-            #
+            # Number of neighbors having neighbors in the mapping
             node_info.num_c = node_info.nc - node_info.num_nc
 
-    def compute_G2_node_info_and_syntactic_feasibility(
+    def compute_G2_node_info_and_verify_edge_feasibility(
         self, G1_node_ind, G1_node, G2_node_ind, G2_node, node_info
     ):
+        """Computes feasibility rules information for the node "G2_node" in G2
+        and checks isomorphism constraints regarding edges
+
+        Returns True if edges are valid and False otherwise.
+        """
         neighbor_ind = 0
         neighbor_c = 0
         neighbor_corr_ind = 0
@@ -826,17 +921,20 @@ class GMState:
         G1_node_neighbors = self.G1_sub_state.G[G1_node]
         G2_node_neighbors = self.G2_sub_state.G[G2_node]
         #
-        if self.graph_matcher.test == "iso2" or self.graph_matcher.test == "sub-iso2":
+        if self.graph_matcher.test == "iso":
             for neighbor in G2_node_neighbors:
                 neighbor_ind = self.G2_sub_state.G_nodes_ind[neighbor]
                 neighbor_corr_ind = self.G2_sub_state.m[neighbor_ind]
-                # if neighbor not in mapping
+                # if neighbor not in the mapping
                 if neighbor_corr_ind == None:
                     neighbor_c = self.G2_sub_state.c[neighbor_ind]
-                    if neighbor_c < len(node_info.DegMNeigh):
-                        node_info.DegMNeigh[neighbor_c] += 1
-
-                # neighbor in mapping
+                    #
+                    if neighbor_c == 0:
+                        # Number of neighbors that do not have neighbors in the mapping
+                        node_info.num_nc += 1
+                    #
+                    node_info.c_sum_neigh += self.G2_sub_state.c_sum[neighbor_ind]
+                # neighbor in the mapping
                 else:
                     neighbor_corr = self.graph_matcher.G1_nodes[neighbor_corr_ind]
                     if (
@@ -852,22 +950,58 @@ class GMState:
                         )
                     ):
                         return False
-            #
+
+            # Number of neighbors having neighbors in the mapping
+            node_info.num_c = (
+                len(self.graph_matcher.G2[G2_node])
+                - self.G2_sub_state.c[G2_node_ind]
+                - node_info.num_nc
+            )
+
+        elif self.graph_matcher.test == "sub-iso":
+            for neighbor in G2_node_neighbors:
+                neighbor_ind = self.G2_sub_state.G_nodes_ind[neighbor]
+                neighbor_corr_ind = self.G2_sub_state.m[neighbor_ind]
+                # if neighbor not in the mapping
+                if neighbor_corr_ind == None:
+                    neighbor_c = self.G2_sub_state.c[neighbor_ind]
+                    # Node classification
+                    if neighbor_c < len(node_info.DegMNeigh):
+                        node_info.DegMNeigh[neighbor_c] += 1
+
+                # neighbor in the mapping
+                else:
+                    neighbor_corr = self.graph_matcher.G1_nodes[neighbor_corr_ind]
+                    if (
+                        # neighbor_corr not in self.graph_matcher.G1[G1_node]
+                        # or
+                        not self.check_edge(
+                            G1_node,
+                            G2_node,
+                            G1_node_neighbors,
+                            neighbor_corr,
+                            G2_node_neighbors,
+                            neighbor,
+                        )
+                    ):
+                        return False
+            # Number of neighbors having neighbors in the mapping
             node_info.num_c = (
                 len(self.graph_matcher.G2[G2_node])
                 - self.G2_sub_state.c[G2_node_ind]
                 - node_info.DegMNeigh[0]
             )
 
-        elif self.graph_matcher.test == "iso" or self.graph_matcher.test == "sub-iso":
+        elif self.graph_matcher.test == "sub-isoM":
             for neighbor in G2_node_neighbors:
                 neighbor_ind = self.G2_sub_state.G_nodes_ind[neighbor]
                 neighbor_corr_ind = self.G2_sub_state.m[neighbor_ind]
-                # if neighbor not in mapping
+                # if neighbor not in the mapping
                 if neighbor_corr_ind == None:
                     neighbor_c = self.G2_sub_state.c[neighbor_ind]
                     #
                     if neighbor_c == 0:
+                        # Number of neighbors that do not have neighbors in the mapping
                         node_info.num_nc += 1
                     #
                     node_info.DegMNeigh_sum += neighbor_c
@@ -875,7 +1009,7 @@ class GMState:
                     if neighbor_c > node_info.DegMNeigh_max:
                         node_info.DegMNeigh_max = neighbor_c
 
-                # neighbor in mapping
+                # neighbor in the mapping
                 else:
                     neighbor_corr = self.graph_matcher.G1_nodes[neighbor_corr_ind]
                     if (
@@ -892,18 +1026,18 @@ class GMState:
                     ):
                         return False
 
-            #
+            # Number of neighbors having neighbors in the mapping
             node_info.num_c = (
                 len(self.graph_matcher.G2[G2_node])
                 - self.G2_sub_state.c[G2_node_ind]
                 - node_info.num_nc
             )
-
+        # For monomorphism
         else:
             for neighbor in G1_node_neighbors:
                 neighbor_ind = self.G1_sub_state.G_nodes_ind[neighbor]
                 neighbor_corr_ind = self.G1_sub_state.m[neighbor_ind]
-                # neighbor in mapping
+                # neighbor in the mapping
                 if neighbor_corr_ind != None:
                     neighbor_corr = self.graph_matcher.G2_nodes[neighbor_corr_ind]
                     if (
@@ -923,23 +1057,23 @@ class GMState:
             for neighbor in self.G2_sub_state.G[G2_node]:
                 neighbor_ind = self.G2_sub_state.G_nodes_ind[neighbor]
                 neighbor_corr_ind = self.G2_sub_state.m[neighbor_ind]
-                # if neighbor not in mapping
+                # if neighbor not in the mapping
                 if neighbor_corr_ind == None:
                     neighbor_c = self.G2_sub_state.c[neighbor_ind]
-                    #
+                    # Number of neighbors that do not have neighbors in the mapping
                     if neighbor_c == 0:
                         node_info.num_nc += 1
 
                     if neighbor_c > node_info.DegMNeigh_max:
                         node_info.DegMNeigh_max = neighbor_c
-            #
+            # Number of neighbors having neighbors in the mapping
             node_info.num_c = (
                 len(self.graph_matcher.G2[G2_node])
                 - self.G2_sub_state.c[G2_node_ind]
                 - node_info.num_nc
             )
 
-        # valide
+        # Valid
         return True
 
     def check_edge(
@@ -951,26 +1085,30 @@ class GMState:
         G2_node_neighbors,
         G2_neighbor,
     ):
+        """Checks if the pairs of nodes (G1_node, G1_neighbor), (G2_node,G2_neighbor)
+        respect the isomorphism conditions.
+        """
         if self.graph_matcher.test != "mono":
             return (
                 G1_neighbor in G1_node_neighbors
                 and self.graph_matcher.compare_edge_attr(
-                    G1_node_neighbors, G1_neighbor, G2_node_neighbors, G2_neighbor
+                    G1_node_neighbors[G1_neighbor], G2_node_neighbors[G2_neighbor]
                 )
             )
         else:
             return (
                 G2_neighbor in G2_node_neighbors
                 and self.graph_matcher.compare_edge_attr(
-                    G1_node_neighbors, G1_neighbor, G2_node_neighbors, G2_neighbor
+                    G1_node_neighbors[G1_neighbor], G2_node_neighbors[G2_neighbor]
                 )
             )
 
 
 class GMSubState:
-    """class for managing feasibility sets and the state of the mapping."""
+    """Class for managing feasibility sets for GraphMatcher."""
 
     def __init__(self, G, G_nodes_ind):
+        """Initializes GMSubState object."""
         self.G = G
         self.G_nodes_ind = G_nodes_ind
         G_size = self.G.number_of_nodes()
@@ -981,44 +1119,46 @@ class GMSubState:
         # Sum of the IDs (numerical) of the neighbors in the mapping
         self.c_sum = [0] * G_size
 
-    # upadate Feasibility Sets
+    # Upadate Feasibility Sets
 
-    def add_node(self, node_id, node):
+    def add_G1_node(self, node_id, node):
         neighbor_ind = 0
         for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
             self.c[neighbor_ind] += 1
             self.c_sum[neighbor_ind] += node_id
 
-    def remove_node(self, node_id, node):
+    def remove_G1_node(self, node_id, node):
         neighbor_ind = 0
         for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
             self.c[neighbor_ind] -= 1
             self.c_sum[neighbor_ind] -= node_id
 
-    def add_node_(self, node_id, node, t_node_id):
+    def add_G2_node(self, node_id, node, t_node_id):
         neighbor_ind = 0
         for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
             self.c[neighbor_ind] += 1
             self.c_sum[neighbor_ind] += t_node_id
 
-    def remove_node_(self, node_id, node, t_node_id):
+    def remove_G2_node(self, node_id, node, t_node_id):
         neighbor_ind = 0
         for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
             self.c[neighbor_ind] -= 1
             self.c_sum[neighbor_ind] -= t_node_id
 
+    # Upadate Feasibility Sets
+
 
 class GMNodeInfo:
     """
-    A class to store and manage node information for cutting rule.
+    A class to store node information about feasibility rules for GraphMatcher.
 
     Attributes
     ----------
-    DegMNeigh (only for isomorphism and sub-graph isomorphism) : list of int
+    DegMNeigh (Only sub-graph isomorphism, node classification) : list of int
         A list where DegMNeigh[i]=val implies that the node has 'val' neighbors
         who have 'i' neighbors in the mapping. For instance, DegMNeigh[0]=2
         implies that the node has 2 neighbors who have no neighbors in the mapping.
@@ -1038,21 +1178,21 @@ class GMNodeInfo:
     also_do : bool
         A flag used for additional processing if required.
 
-    num_nc (only for monomorphism and sub-iso2) : int
+    num_nc (For isomorphism, monomorphism and sub-iso2) : int
         Corresponds to degMo in the NodeOrdoring class. It represents the number
         of neighbors that do not have neighbors in the mapping.
         DegMNeigh[0] equal to num_nc
 
-    DegMNeigh_sum (only for monomorphism and sub-iso2) : int
+    DegMNeigh_sum (only for monomorphism and sub-isoM) : int
         The sum of the degM attribute of the neighbors.
 
-    DegMNeigh_max (only for monomorphism and sub-iso2) : int
+    DegMNeigh_max (only for monomorphism and sub-isoM) : int
         The maximum of the degM attribute of the neighbors.
     """
 
     def __init__(self, size):
         """
-        Initialize the GMNodeInfo instance.
+        Initializes the GMNodeInfo object.
 
         Parameters
         ----------
@@ -1063,18 +1203,17 @@ class GMNodeInfo:
         self.c = 0  # Number of neighbors in the mapping
         self.nc = 0  # Number of neighbors not in the mapping
         self.c_sum = 0  # Sum of IDs of neighbors in the mapping
+        self.c_sum_neigh = 0  #
         self.num_c = 0  # Number of neighbors having neighbors in the mapping
         self.also_do = False  # Additional processing flag
 
-        # Only for monomorphism and sub-isomorphism
+        #
         self.num_nc = 0  # Number of neighbors that do not have neighbors in the mapping
         self.DegMNeigh_sum = 0  # Sum of the degM attribute of the neighbors
         self.DegMNeigh_max = 0  # Maximum of the degM attribute of the neighbors
 
     def clear(self):
-        """
-        Reset all attributes to their default values.
-        """
+        """Resets all attributes to their default values."""
         self.c = 0
         self.nc = 0
         self.num_c = 0
@@ -1082,6 +1221,7 @@ class GMNodeInfo:
         self.DegMNeigh_max = 0
         self.DegMNeigh_sum = 0
         self.also_do = False
+        self.c_sum_neigh = 0
         #
         for ind in range(len(self.DegMNeigh)):
             self.DegMNeigh[ind] = 0
@@ -1095,24 +1235,50 @@ class GMNodeInfo:
 
 
 class MultiGraphMatcher(GraphMatcher):
-    def __init__(self, G1, G2, node_label=None, node_match=None, edge_match=None):
-        super().__init__(G1, G2, node_label, node_match, edge_match)
+    """fastiso implementation for matching undirect MultiGraphs."""
+
+    def __init__(
+        self,
+        G1,
+        G2,
+        node_label=None,
+        node_match=None,
+        edge_match=None,
+        path_graph=False,
+    ):
+        """Initializes MultiGraphMatcher.
+        G1 and G2 have to be nx.MultiGraph instances.
+
+        Examples
+        --------
+        >>> from networkx.algorithms.isomorphism.isomorphfastiso import MultiGraphMatcher
+        >>> G1 = nx.DiGraph(nx.path_graph(4, create_using=nx.MultiGraph()))
+        >>> G2 = nx.DiGraph(nx.path_graph(4, create_using=nx.MultiGraph()))
+        >>> gm = MultiGraphMatcher(G1, G2, path_graph=True)
+        """
+        super().__init__(G1, G2, node_label, node_match, edge_match, path_graph)
 
     def initialize_sate(self):
+        """(Re)Initializes the state of MultiGraphMatcher."""
         self.state = MultiGMState(self)
 
     def _feasibility(
         self, G1_node_ind, G1_node, G2_node_ind, G2_node, G1_node_info, G2_node_info
     ):
+        """check if the addition of the pair (G1_node, G2_node)
+        respects the feasibility rules.
+        """
         #
         c_e = self.state.G2_sub_state.c_e[G2_node_ind]
-        if self.test == "iso" or self.test == "iso2":
+        if self.test == "iso":
             if (
+                # Number of edges with nodes in the mapping.
                 G1_node_info.c_e != c_e
+                # Number of edges with nodes that are not in the mapping.
                 or G1_node_info.nc_e != self.G2_degrees[G2_node_ind] - c_e
             ):
                 return False
-        elif self.test == "sub-iso" or self.test == "sub-iso2":
+        elif self.test == "sub-iso" or self.test == "sub-isoM":
             if (
                 G1_node_info.c_e != c_e
                 or G1_node_info.nc_e > self.G2_degrees[G2_node_ind] - c_e
@@ -1131,9 +1297,10 @@ class MultiGraphMatcher(GraphMatcher):
 
 
 class MultiGMState(GMState):
-    """_summary_"""
+    """Internal representation of state for the MultiGraphMatcher class."""
 
     def __init__(self, graph_matcher):
+        """Initializes MultiGMState object."""
         self.graph_matcher = graph_matcher
         #
         self.G1_sub_state = MultiGMSubState(
@@ -1147,7 +1314,7 @@ class MultiGMState(GMState):
         self.G1_nodes_info = [None] * G1_size
         self.G2_nodes_info = [None] * G1_size
         #
-        if self.graph_matcher.test == "iso2" or self.graph_matcher.test == "sub-iso2":
+        if self.graph_matcher.test == "sub-iso":
             size_tmp = 0
             for ind in range(G1_size):
                 size_tmp = self.graph_matcher.nodes_degMNeighMax[ind] + 1
@@ -1159,15 +1326,19 @@ class MultiGMState(GMState):
                 self.G2_nodes_info[ind] = MultiGMNodeInfo(0)
 
     def compute_G1_node_info(self, node_info, G1_node_ind, G1_node):
+        """Computes feasibility rules information for the node "G1_node" in G1."""
         #
         super().compute_G1_node_info(node_info, G1_node_ind, G1_node)
+        # Number of edges with nodes in the mapping.
         node_info.c_e = self.G1_sub_state.c_e[G1_node_ind]
+        # Number of edges with nodes that are not in the mapping.
         node_info.nc_e = self.graph_matcher.G1_degrees[G1_node_ind] - node_info.c_e
 
-    def compute_G2_node_info_and_syntactic_feasibility(
+    def compute_G2_node_info_and_verify_edge_feasibility(
         self, G1_node_ind, G1_node, G2_node_ind, G2_node, node_info
     ):
-        return super().compute_G2_node_info_and_syntactic_feasibility(
+        """Computes feasibility rules information for the node "G2_node" in G2."""
+        return super().compute_G2_node_info_and_verify_edge_feasibility(
             G1_node_ind, G1_node, G2_node_ind, G2_node, node_info
         )
 
@@ -1180,6 +1351,9 @@ class MultiGMState(GMState):
         G2_node_neighbors,
         G2_neighbor,
     ):
+        """Checks if the pairs of nodes (G1_node, G1_neighbor), (G2_node,G2_neighbor)
+        respect the isomorphism conditions.
+        """
         if self.graph_matcher.test != "mono":
             return (
                 G1_neighbor in G1_node_neighbors
@@ -1188,10 +1362,8 @@ class MultiGMState(GMState):
                 and self.graph_matcher.compare_edge_attr(
                     # G1_node,
                     # G2_node,
-                    G1_node_neighbors,
-                    G1_neighbor,
-                    G2_node_neighbors,
-                    G2_neighbor,
+                    G1_node_neighbors[G1_neighbor],
+                    G2_node_neighbors[G2_neighbor],
                 )
             )
         else:
@@ -1202,24 +1374,24 @@ class MultiGMState(GMState):
                 and self.graph_matcher.compare_edge_attr(
                     # G1_node,
                     # G2_node,
-                    G1_node_neighbors,
-                    G1_neighbor,
-                    G2_node_neighbors,
-                    G2_neighbor,
+                    G1_node_neighbors[G1_neighbor],
+                    G2_node_neighbors[G2_neighbor],
                 )
             )
 
 
 class MultiGMSubState(GMSubState):
-    """_summary_"""
+    """Class for managing feasibility sets for GraphMatcher."""
 
     def __init__(self, G, G_nodes_ind):
+        """Initializes MultiGMSubState object."""
         super().__init__(G, G_nodes_ind)
         # Number of edges in the mapping
         self.c_e = [0] * self.G.number_of_nodes()
 
     # upadate Feasibility Sets
-    def add_node(self, node_id, node):
+
+    def add_G1_node(self, node_id, node):
         neighbor_ind = 0
         for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
@@ -1227,7 +1399,7 @@ class MultiGMSubState(GMSubState):
             self.c_e[neighbor_ind] += len(self.G[node][neighbor])
             self.c_sum[neighbor_ind] += node_id
 
-    def add_node_(self, node_id, node, t_node_id):
+    def add_G2_node(self, node_id, node, t_node_id):
         neighbor_ind = 0
         for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
@@ -1235,7 +1407,7 @@ class MultiGMSubState(GMSubState):
             self.c_e[neighbor_ind] += len(self.G[node][neighbor])
             self.c_sum[neighbor_ind] += t_node_id
 
-    def remove_node(self, node_id, node):
+    def remove_G1_node(self, node_id, node):
         neighbor_ind = 0
         for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
@@ -1243,7 +1415,7 @@ class MultiGMSubState(GMSubState):
             self.c_e[neighbor_ind] -= len(self.G[node][neighbor])
             self.c_sum[neighbor_ind] -= node_id
 
-    def remove_node_(self, node_id, node, t_node_id):
+    def remove_G2_node(self, node_id, node, t_node_id):
         neighbor_ind = 0
         for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
@@ -1251,11 +1423,14 @@ class MultiGMSubState(GMSubState):
             self.c_e[neighbor_ind] -= len(self.G[node][neighbor])
             self.c_sum[neighbor_ind] -= t_node_id
 
+    # upadate Feasibility Sets
+
 
 class MultiGMNodeInfo(GMNodeInfo):
-    """_summary_"""
+    """A class to store node information about feasibility rules for MultiGraphMatcher"""
 
     def __init__(self, size):
+        """Initialize the MultiGMNodeInfo object."""
         super().__init__(size)
         # Number of edges in the mapping
         self.c_e = 0
@@ -1276,11 +1451,15 @@ class MultiGMNodeInfo(GMNodeInfo):
 
 
 class DiNodeCommand(NodeCommand):
+    """Computes the node odering for DiGraph using attributes
+    of the NodeOrderingProp class.
+    """
+
     def update_no(self, no):
         """Marks a node as present and updates its neighbors' properties.
 
         Parameters:
-            no: NodeOrdoringProp corresponding to the node to be updated.
+            no: NodeOrderingProp corresponding to the node to be updated.
         """
         no.present = 1
         no.candidate = 1
@@ -1290,14 +1469,19 @@ class DiNodeCommand(NodeCommand):
         for neighbor in self.graph_matcher.G1.neighbors(node):
             neighbor_ind = self.graph_matcher.G1_nodes_ind[neighbor]
             no_neigh = self.nodes[neighbor_ind]
+            #
+            if no.degMNeighMax < no_neigh.degM:
+                no.degMNeighMax = no_neigh.degM
+            #
             if no_neigh.present == 0:
                 no_neigh.degM += 1
                 no_neigh.degNeigh += self.graph_matcher.G1_o.number_of_edges(
                     node, neighbor
                 ) + self.graph_matcher.G1_o.number_of_edges(neighbor, node)
-                self.update_degMNeigh_and_degMo(no_neigh)
+                # self.update_degMNeigh_and_degMo(no_neigh)
                 # no need DegNeigh for undirect graph
             if no_neigh.candidate == 0:
+                self.update_degMNeigh_and_degMo(no_neigh)
                 no_neigh.candidate = 1
                 self.candidates.append(no_neigh)
                 self.parents[no_neigh.id] = no.id
@@ -1307,10 +1491,28 @@ class DiNodeCommand(NodeCommand):
 
 
 class DiGraphMatcher(GraphMatcher):
-    """_summary_"""
+    """fastiso implementation for matching Digraphs"""
 
-    def __init__(self, G1, G2, node_label=None, node_match=None, edge_match=None):
-        super().__init__(G1, G2, node_label, node_match, edge_match)
+    def __init__(
+        self,
+        G1,
+        G2,
+        node_label=None,
+        node_match=None,
+        edge_match=None,
+        path_label=False,
+    ):
+        """Initializes DiGraphMatcher.
+        G1 and G2 have to be nx.DiGraph or nx.MultiDiGraph instances.
+
+        Examples
+        --------
+        >>> from networkx.algorithms.isomorphism.isomorphfastiso import MultiGraphMatcher
+        >>> G1 = nx.DiGraph(nx.path_graph(4, create_using=nx.DiGraph()))
+        >>> G2 = nx.DiGraph(nx.path_graph(4, create_using=nx.DiGraph()))
+        >>> gm = DiGraphMatcher(G1, G2, path_graph=True)
+        """
+        super().__init__(G1, G2, node_label, node_match, edge_match, path_label)
         #
         self.G1_degrees_in = [self.G1.in_degree[node] for node in self.G1_nodes]
         self.G1_degrees_out = [self.G1.out_degree[node] for node in self.G1_nodes]
@@ -1319,6 +1521,7 @@ class DiGraphMatcher(GraphMatcher):
         self.G2_degrees_out = [self.G2.out_degree[node] for node in self.G2_nodes]
 
     def initialize_sate(self):
+        """(Re)Initializes the state of DiGraphMatcher."""
         self.state = DiGMState(self)
 
     def initialize(self):
@@ -1331,9 +1534,12 @@ class DiGraphMatcher(GraphMatcher):
         #
         return super().initialize()
 
-    def compute_node_ordoring(self):
+    def compute_variable_ordering(self):
+        """
+        Calls the DiNodeCommand class to compute the variable ordering.
+        """
         no_cmd = DiNodeCommand()
-        no_cmd.compute_node_ordoring(self)
+        no_cmd.compute_variable_ordering(self)
         self.nodes_order = no_cmd.nodes_order
         self.parents = no_cmd.parents
         self.nodes_degMNeighMax = no_cmd.nodes_degMNeighMax
@@ -1341,18 +1547,25 @@ class DiGraphMatcher(GraphMatcher):
     def _feasibility(
         self, G1_node_ind, G1_node, G2_node_ind, G2_node, G1_node_info, G2_node_info
     ):
+        """check if the addition of the pair (G1_node, G2_node)
+        respects the feasibility rules.
+        """
         #
         c_e_in = self.state.G2_sub_state.c_e_in[G2_node_ind]
         c_e_out = self.state.G2_sub_state.c_e_out[G2_node_ind]
-        if self.test == "iso" or self.test == "iso2":
+        if self.test == "iso":
             if (
+                # Number of in edges in the mapping
                 G1_node_info.c_e_in != c_e_in
+                # Number of in edges not in the mapping
                 or G1_node_info.nc_e_in != self.G2_degrees_out[G2_node_ind] - c_e_in
+                # Number of out edges in the mapping
                 or G1_node_info.c_e_out != c_e_out
+                # Number of out edges not in the mapping
                 or G1_node_info.nc_e_out != self.G2_degrees_in[G2_node_ind] - c_e_out
             ):
                 return False
-        elif self.test == "sub-iso" or self.test == "sub-iso2":
+        elif self.test == "sub-iso" or self.test == "sub-isoM":
             if (
                 G1_node_info.c_e_in != c_e_in
                 or G1_node_info.nc_e_in > self.G2_degrees_out[G2_node_ind] - c_e_in
@@ -1373,7 +1586,8 @@ class DiGraphMatcher(GraphMatcher):
             G1_node_ind, G1_node, G2_node_ind, G2_node, G1_node_info, G2_node_info
         )
 
-    def reset_node_view(self):
+    def reset_graph_view(self):
+        """Resets undirect graph view."""
         if self.G1_o != None:
             self.G1 = None
             self.G1 = self.G1_o
@@ -1385,63 +1599,48 @@ class DiGraphMatcher(GraphMatcher):
 
     def is_isomorphic(self):
         result = super().is_isomorphic()
-        self.reset_node_view()
-        return result
-
-    def is_isomorphic_2(self):
-        result = super().is_isomorphic_2()
-        self.reset_node_view()
+        self.reset_graph_view()
         return result
 
     def subgraph_is_isomorphic(self):
         result = super().subgraph_is_isomorphic()
-        self.reset_node_view()
+        self.reset_graph_view()
         return result
 
-    def subgraph_is_isomorphic_2(self):
-        result = super().subgraph_is_isomorphic_2()
-        self.reset_node_view()
+    def subgraph_is_isomorphic_M(self):
+        result = super().subgraph_is_isomorphic_M()
+        self.reset_graph_view()
         return result
 
     def subgraph_is_monomorphic(self):
         result = super().subgraph_is_monomorphic()
-        self.reset_node_view()
+        self.reset_graph_view()
         return result
 
-    def subgraph_is_monomorphic_2(self):
-        result = super().subgraph_is_monomorphic_2()
-        self.reset_node_view()
-        return result
+    ##
 
     def isomorphisms_iter(self):
         yield from super().isomorphisms_iter()
-        self.reset_node_view()
-
-    def isomorphisms_iter_2(self):
-        yield from super().isomorphisms_iter_2()
-        self.reset_node_view()
+        self.reset_graph_view()
 
     def subgraph_isomorphisms_iter(self):
         yield from super().subgraph_isomorphisms_iter()
-        self.reset_node_view()
+        self.reset_graph_view()
 
-    def subgraph_isomorphisms_iter_2(self):
-        yield from super().subgraph_isomorphisms_iter_2()
-        self.reset_node_view()
+    def subgraph_isomorphisms_iter_M(self):
+        yield from super().subgraph_isomorphisms_iter_M()
+        self.reset_graph_view()
 
     def subgraph_monomorphisms_iter(self):
         yield from super().subgraph_monomorphisms_iter()
-        self.reset_node_view()
-
-    def subgraph_monomorphisms_iter_2(self):
-        yield from super().subgraph_monomorphisms_iter_2()
-        self.reset_node_view()
+        self.reset_graph_view()
 
 
 class DiGMState(GMState):
-    """_summary_"""
+    """Internal representation of state for the DiGraphMatcher class."""
 
     def __init__(self, graph_matcher):
+        """Initializes DiGMState object."""
         self.graph_matcher = graph_matcher
         #
         self.G1_sub_state = DiGMSubState(
@@ -1459,7 +1658,7 @@ class DiGMState(GMState):
         self.G1_nodes_info = [None] * G1_size
         self.G2_nodes_info = [None] * G1_size
         #
-        if self.graph_matcher.test == "iso2" or self.graph_matcher.test == "sub-iso2":
+        if self.graph_matcher.test == "sub-iso":
             size_tmp = 0
             for ind in range(G1_size):
                 size_tmp = self.graph_matcher.nodes_degMNeighMax[ind] + 1
@@ -1471,23 +1670,29 @@ class DiGMState(GMState):
                 self.G2_nodes_info[ind] = DiGMNodeInfo(0)
 
     def compute_G1_node_info(self, node_info, G1_node_ind, G1_node):
+        """Computes feasibility rules information for the node "G1_node" in G1"""
         #
         super().compute_G1_node_info(node_info, G1_node_ind, G1_node)
-        # in
+        # Number of in edges in the mapping
         node_info.c_e_in = self.G1_sub_state.c_e_in[G1_node_ind]
+        # Number of in edges not in the mapping
         node_info.nc_e_in = (
             self.graph_matcher.G1_degrees_out[G1_node_ind] - node_info.c_e_in
         )
-        # out
+        # Number of out edges in the mapping
         node_info.c_e_out = self.G1_sub_state.c_e_out[G1_node_ind]
+        # Number of out edges not in the mapping
         node_info.nc_e_out = (
             self.graph_matcher.G1_degrees_in[G1_node_ind] - node_info.c_e_out
         )
 
-    def compute_G2_node_info_and_syntactic_feasibility(
+    def compute_G2_node_info_and_verify_edge_feasibility(
         self, G1_node_ind, G1_node, G2_node_ind, G2_node, node_info
     ):
-        return super().compute_G2_node_info_and_syntactic_feasibility(
+        """Computes feasibility rules information for the node
+        "G2_node" in G2 and checks isomorphism constraints regarding edges
+        """
+        return super().compute_G2_node_info_and_verify_edge_feasibility(
             G1_node_ind, G1_node, G2_node_ind, G2_node, node_info
         )
 
@@ -1500,6 +1705,9 @@ class DiGMState(GMState):
         G2_node_neighbors,
         G2_neighbor,
     ):
+        """Checks if the pairs of nodes (G1_node, G1_neighbor), (G2_node,G2_neighbor)
+        respect the isomorphism conditions.
+        """
         n_G1_node_G1_neighbor = self.graph_matcher.G1_o.number_of_edges(
             G1_node, G1_neighbor
         )
@@ -1514,6 +1722,7 @@ class DiGMState(GMState):
         )
         if self.graph_matcher.test != "mono":
             if (
+                # G1_neighbor in G1_node_neighbors
                 n_G1_node_G1_neighbor != n_G2_node_G2_neighbor
                 or n_G1_neighbor_G1_node != n_G2_neighbor_G2_node
             ):
@@ -1521,6 +1730,7 @@ class DiGMState(GMState):
 
         else:
             if (
+                # G2_neighbor in G2_node_neighbors
                 n_G1_node_G1_neighbor > n_G2_node_G2_neighbor
                 or n_G1_neighbor_G1_node > n_G2_neighbor_G2_node
             ):
@@ -1529,20 +1739,16 @@ class DiGMState(GMState):
         if n_G1_node_G1_neighbor != 0 and not self.graph_matcher.compare_edge_attr(
             # G1_node,
             # G2_node,
-            self.graph_matcher.G1_o.succ[G1_node],
-            G1_neighbor,
-            self.graph_matcher.G2_o.succ[G2_node],
-            G2_neighbor,
+            self.graph_matcher.G1_o.succ[G1_node][G1_neighbor],
+            self.graph_matcher.G2_o.succ[G2_node][G2_neighbor],
         ):
             return False
 
         if n_G1_neighbor_G1_node != 0 and not self.graph_matcher.compare_edge_attr(
             # G1_node,
             # G2_node,
-            self.graph_matcher.G1_o.pred[G1_node],
-            G1_neighbor,
-            self.graph_matcher.G2_o.pred[G2_node],
-            G2_neighbor,
+            self.graph_matcher.G1_o.pred[G1_node][G1_neighbor],
+            self.graph_matcher.G2_o.pred[G2_node][G2_neighbor],
         ):
             return False
 
@@ -1550,9 +1756,10 @@ class DiGMState(GMState):
 
 
 class DiGMSubState(GMSubState):
-    """_summary_"""
+    """Class for managing feasibility sets for DiGraphMatcher."""
 
     def __init__(self, G, G_o, G_nodes_ind):
+        """Initializes DiGMSubState object."""
         super().__init__(G, G_nodes_ind)
         self.G_o = G_o
         # Number of in edges in the mapping
@@ -1560,8 +1767,9 @@ class DiGMSubState(GMSubState):
         # Number of out edges in the mapping
         self.c_e_out = [0] * self.G.number_of_nodes()
 
-    # upadate Feasibility Sets
-    def add_node(self, node_id, node):
+    # Upadate Feasibility Sets
+
+    def add_G1_node(self, node_id, node):
         neighbor_ind = 0
         for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
@@ -1570,7 +1778,7 @@ class DiGMSubState(GMSubState):
             self.c_e_in[neighbor_ind] += self.G_o.number_of_edges(neighbor, node)
             self.c_sum[neighbor_ind] += node_id
 
-    def add_node_(self, node_id, node, t_node_id):
+    def add_G2_node(self, node_id, node, t_node_id):
         neighbor_ind = 0
         for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
@@ -1579,7 +1787,7 @@ class DiGMSubState(GMSubState):
             self.c_e_in[neighbor_ind] += self.G_o.number_of_edges(neighbor, node)
             self.c_sum[neighbor_ind] += t_node_id
 
-    def remove_node(self, node_id, node):
+    def remove_G1_node(self, node_id, node):
         neighbor_ind = 0
         for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
@@ -1588,7 +1796,7 @@ class DiGMSubState(GMSubState):
             self.c_e_in[neighbor_ind] -= self.G_o.number_of_edges(neighbor, node)
             self.c_sum[neighbor_ind] -= node_id
 
-    def remove_node_(self, node_id, node, t_node_id):
+    def remove_G2_node(self, node_id, node, t_node_id):
         neighbor_ind = 0
         for neighbor in self.G[node]:
             neighbor_ind = self.G_nodes_ind[neighbor]
@@ -1597,11 +1805,17 @@ class DiGMSubState(GMSubState):
             self.c_e_in[neighbor_ind] -= self.G_o.number_of_edges(neighbor, node)
             self.c_sum[neighbor_ind] -= t_node_id
 
+    # Upadate Feasibility Sets
+
 
 class DiGMNodeInfo(GMNodeInfo):
-    """_summary_"""
+    """A class to store node information about
+    feasibility rules for DiGraphMatcher."""
 
     def __init__(self, size):
+        """
+        Initializes the DiGMNodeInfo object.
+        """
         super().__init__(size)
         # Number of in edges in the mapping
         self.c_e_in = 0
@@ -1613,6 +1827,7 @@ class DiGMNodeInfo(GMNodeInfo):
         self.nc_e_out = 0
 
     def clear(self):
+        """Resets all attributes to their default values."""
         super().clear()
         self.c_e_in = 0
         self.c_e_out = 0
@@ -1628,5 +1843,24 @@ class DiGMNodeInfo(GMNodeInfo):
 
 
 class MultiDiGraphMatcher(DiGraphMatcher):
-    def __init__(self, G1, G2, node_label=None, node_match=None, edge_match=None):
-        super().__init__(G1, G2, node_label, node_match, edge_match)
+    def __init__(
+        self,
+        G1,
+        G2,
+        node_label=None,
+        node_match=None,
+        edge_match=None,
+        path_label=False,
+    ):
+        """
+        Initializes DiGraphMatcher.
+        G1 and G2 have to be nx.DiGraph or nx.MultiDiGraph instances.
+
+        Examples
+        --------
+        >>> from networkx.algorithms.isomorphism.isomorphfastiso import MultiGraphMatcher
+        >>> G1 = nx.DiGraph(nx.path_graph(4, create_using=nx.DiGraph()))
+        >>> G2 = nx.DiGraph(nx.path_graph(4, create_using=nx.DiGraph()))
+        >>> gm = MultiDiGraphMatcher(G1, G2, path_graph=True)
+        """
+        super().__init__(G1, G2, node_label, node_match, edge_match, path_label)
