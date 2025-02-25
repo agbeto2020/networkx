@@ -61,10 +61,8 @@ class TestWikipediaExample:
         g2.add_edges_from(self.g2edges)
         gm = GraphMatcher(g1, g2)
         assert gm.is_isomorphic()
-        assert gm.is_isomorphic_2()
         # Just testing some cases
         assert gm.subgraph_is_monomorphic()
-        assert gm.subgraph_is_monomorphic_2()
 
         mapping = sorted(gm.mapping.items())
 
@@ -82,7 +80,7 @@ class TestWikipediaExample:
         g3 = g2.subgraph([1, 2, 3, 4])
         gm = GraphMatcher(g1, g3)
         assert gm.subgraph_is_isomorphic()
-        assert gm.subgraph_is_isomorphic_2()
+        assert gm.subgraph_is_isomorphic_M()
 
     def test_subgraph_mono(self):
         g1 = nx.Graph()
@@ -91,7 +89,6 @@ class TestWikipediaExample:
         g2.add_edges_from([[1, 2], [2, 3], [3, 4]])
         gm = GraphMatcher(g1, g2)
         assert gm.subgraph_is_monomorphic()
-        assert gm.subgraph_is_monomorphic_2()
 
 
 class TestVF2GraphDB:
@@ -134,7 +131,6 @@ class TestVF2GraphDB:
         g2 = self.create_graph(head / "iso_r01_s80.B99")
         gm = GraphMatcher(g1, g2)
         assert gm.is_isomorphic()
-        assert gm.is_isomorphic_2()
 
     def test_subgraph(self):
         # A is the subgraph
@@ -144,10 +140,9 @@ class TestVF2GraphDB:
         graph = self.create_graph(head / "si2_b06_m200.B99")
         gm = GraphMatcher(graph, subgraph)
         assert gm.subgraph_is_isomorphic()
-        assert gm.subgraph_is_isomorphic_2()
+        assert gm.subgraph_is_isomorphic_M()
         # Just testing some cases
         assert gm.subgraph_is_monomorphic()
-        assert gm.subgraph_is_monomorphic_2()
 
     # There isn't a similar test implemented for subgraph monomorphism,
     # feel free to create one.
@@ -225,10 +220,8 @@ def test_multiedge():
             else:
                 gm = MultiDiGraphMatcher(g1, g2)
             assert gm.is_isomorphic()
-            assert gm.is_isomorphic_2()
             # Testing if monomorphism works in multigraphs
             assert gm.subgraph_is_monomorphic()
-            assert gm.subgraph_is_monomorphic_2()
 
 
 def test_selfloop():
@@ -260,7 +253,6 @@ def test_selfloop():
             else:
                 gm = DiGraphMatcher(g1, g2)
             assert gm.is_isomorphic()
-            assert gm.is_isomorphic_2()
 
 
 def test_selfloop_mono():
@@ -293,7 +285,6 @@ def test_selfloop_mono():
             else:
                 gm = DiGraphMatcher(g2, g1)
             assert not gm.subgraph_is_monomorphic()
-            assert not gm.subgraph_is_monomorphic_2()
 
 
 def test_isomorphism_iter1():
@@ -309,7 +300,7 @@ def test_isomorphism_iter1():
     gm12 = DiGraphMatcher(g1, g2)
     gm13 = DiGraphMatcher(g1, g3)
     x = list(gm12.subgraph_isomorphisms_iter())
-    y = list(gm13.subgraph_isomorphisms_iter_2())
+    y = list(gm13.subgraph_isomorphisms_iter_M())
     assert {"A": "Y", "B": "Z"} in x
     assert {"B": "Y", "C": "Z"} in x
     assert {"A": "Z", "B": "Y"} in y
@@ -335,7 +326,6 @@ def test_monomorphism_iter1():
     gm21 = DiGraphMatcher(g2, g1)
     # Check if StopIteration exception returns False
     assert not gm21.subgraph_is_monomorphic()
-    assert not gm21.subgraph_is_monomorphic_2()
 
 
 def test_isomorphism_iter2():
@@ -405,15 +395,6 @@ def test_noncomparable_nodes():
     assert gm.subgraph_is_monomorphic()
 
 
-class MyDiGraphMatcher(DiGraphMatcher):
-    def compare_edge_attr(
-        self, G1_node_neighbors, G1_neighbor, G2_node_neighbors, G2_neighbor
-    ):
-        return self.edge_match(
-            G1_node_neighbors[G1_neighbor], G2_node_neighbors[G2_neighbor]
-        )
-
-
 def test_monomorphism_edge_match():
     G = nx.DiGraph()
     G.add_node(1)
@@ -427,6 +408,260 @@ def test_monomorphism_edge_match():
     SG.add_node(6)
     SG.add_edge(5, 6, label="A")
 
-    gm = MyDiGraphMatcher(G, SG, edge_match=iso.categorical_edge_match("label", None))
+    gm = DiGraphMatcher(G, SG, edge_match=iso.categorical_edge_match("label", None))
     assert gm.subgraph_is_monomorphic()
-    assert gm.subgraph_is_monomorphic_2()
+
+
+def match(datasets1, datasets2):
+    values1 = {data.get("color", -1) for data in datasets1.values()}
+    values2 = {data.get("color", -1) for data in datasets2.values()}
+    return values1 >= values2
+
+
+def test_monomorphism_multigraph_edge_match():
+    # source:
+    graph = nx.MultiGraph([[0, 1, {"color": 0}], [0, 1, {"color": 1}]])
+    subgraph = nx.MultiGraph([[0, 1, {"color": 0}]])
+
+    gm = MultiGraphMatcher(graph, subgraph, edge_match=match)
+    assert gm.subgraph_is_monomorphic()
+    ##
+    graph = nx.MultiGraph([[0, 1, {"color": 0}], [0, 1, {"color": 0}]])
+    subgraph = nx.MultiGraph([[0, 1, {"color": 0}]])
+    gm = MultiGraphMatcher(
+        graph, subgraph, edge_match=iso.categorical_multiedge_match("color", -1)
+    )
+    assert gm.subgraph_is_monomorphic()
+
+
+def test_multidigraph_isomorphism():
+    # source: https://github.com/networkx/networkx/issues/6257#issue-1479584767
+    g = nx.MultiDiGraph({0: [1, 1, 2, 2, 3], 1: [2, 3, 3], 2: [3]})
+    h = nx.MultiDiGraph({0: [1, 1, 2, 2, 3], 1: [2, 3, 3], 3: [2]})
+    gm = MultiDiGraphMatcher(g, h)
+    assert not gm.is_isomorphic()
+
+
+def test_small_graph():
+    # source: https://github.com/networkx/networkx/issues/4019#issuecomment-649457761
+    # FASTiso do it in 64 seconds
+    # vf2 do it in 597 seconds
+    # vf2pp do it in 1189 seconds
+    source_graph_nodes = [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+    ]
+    source_graph_edges = [
+        (0, 1),
+        (1, 2),
+        (2, 3),
+        (3, 4),
+        (0, 5),
+        (0, 6),
+        (0, 7),
+        (1, 8),
+        (1, 9),
+        (2, 10),
+        (2, 11),
+        (3, 12),
+        (3, 13),
+        (4, 14),
+        (4, 15),
+        (4, 16),
+        (17, 18),
+        (17, 19),
+        (17, 20),
+        (20, 21),
+        (21, 22),
+        (20, 23),
+        (17, 24),
+        (20, 25),
+        (21, 26),
+        (22, 27),
+        (21, 28),
+        (22, 29),
+        (22, 30),
+        (23, 31),
+        (23, 32),
+        (23, 33),
+        (34, 35),
+        (35, 36),
+        (35, 37),
+        (35, 38),
+        (34, 39),
+        (37, 40),
+        (37, 41),
+        (37, 42),
+        (34, 43),
+        (34, 44),
+        (38, 45),
+        (38, 46),
+        (38, 47),
+        (36, 48),
+        (36, 49),
+        (36, 50),
+    ]
+
+    target_graph_nodes = [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+    ]
+    target_graph_edges = [
+        (0, 1),
+        (1, 2),
+        (2, 3),
+        (3, 4),
+        (4, 5),
+        (3, 6),
+        (2, 7),
+        (1, 8),
+        (0, 9),
+        (0, 10),
+        (0, 11),
+        (1, 12),
+        (2, 13),
+        (3, 14),
+        (4, 15),
+        (4, 16),
+        (17, 18),
+        (18, 19),
+        (19, 20),
+        (17, 21),
+        (18, 22),
+        (19, 23),
+        (20, 24),
+        (20, 25),
+        (19, 26),
+        (20, 27),
+        (17, 28),
+        (17, 29),
+        (18, 30),
+        (30, 31),
+        (30, 32),
+        (30, 33),
+        (34, 35),
+        (35, 36),
+        (36, 37),
+        (34, 38),
+        (35, 39),
+        (36, 40),
+        (37, 41),
+        (37, 42),
+        (37, 43),
+        (35, 44),
+        (34, 45),
+        (34, 46),
+        (36, 47),
+        (47, 48),
+        (47, 49),
+        (47, 50),
+    ]
+
+    source_graph = nx.Graph()
+    source_graph.add_nodes_from(source_graph_nodes)
+    source_graph.add_edges_from(source_graph_edges)
+
+    target_graph = nx.Graph()
+    target_graph.add_nodes_from(target_graph_nodes)
+    target_graph.add_edges_from(target_graph_edges)
+
+    gm = GraphMatcher(source_graph, target_graph)
+    assert not gm.is_isomorphic()
