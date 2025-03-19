@@ -87,7 +87,7 @@ class NodeCommand:
     def __init__(
         self,
     ):
-        self.limit=4
+        self.limit = 4
 
     #
     def update_degMNeigh_and_degMo(self, no):
@@ -98,12 +98,12 @@ class NodeCommand:
             neighbor_ind = self.graph_matcher.G1_nodes_ind[neighbor]
             no_neigh = self.nodes[neighbor_ind]
             if no_neigh.present == 0:
-                if no.degM==0: 
-                   no_neigh.degMo -= 1
+                if no.degM == 0:
+                    no_neigh.degMo -= 1
                 no_neigh.degMNeigh += 1
 
     #
-    def update_no(self, no,level):
+    def update_no(self, no, level):
         """Marks a node as present and updates its neighbors' properties.
 
         Parameters:
@@ -111,7 +111,7 @@ class NodeCommand:
         """
         no.present = 1
         no.candidate = 1
-        degM=no.degM if no.degM<self.limit else self.limit 
+        degM = no.degM if no.degM < self.limit else self.limit
         no.degM = 0
         node = no.node
         #
@@ -123,16 +123,16 @@ class NodeCommand:
                 no.degMNeighMax = no_neigh.degM
             #
             if no_neigh.present == 0:
-                if self.nodes_limit[no_neigh.id]<self.limit:
-                   self.update_degMNeigh_and_degMo(no_neigh)
-                   self.nodes_limit[no_neigh.id]+=1
+                if self.nodes_limit[no_neigh.id] < self.limit:
+                    self.update_degMNeigh_and_degMo(no_neigh)
+                    self.nodes_limit[no_neigh.id] += 1
                 #
                 no_neigh.degM += 1
                 no_neigh.degNeigh += len(self.graph_matcher.G1[node][neighbor])
-                no_neigh.degMNeigh-=degM
-                if level==0:
-                   no_neigh.degMo-=1
-                   
+                no_neigh.degMNeigh -= degM
+                if level == 0:
+                    no_neigh.degMo -= 1
+
                 # no need DegNeigh for undirect graph
             if no_neigh.candidate == 0:
                 no_neigh.candidate = 1
@@ -179,7 +179,7 @@ class NodeCommand:
         else:
             selected_no = min(self.nodes, key=lambda obj: -obj.deg)
         #
-        self.update_no(selected_no,n)
+        self.update_no(selected_no, n)
         self.nodes_order[n] = selected_no.id
         self.nodes_degMNeighMax[n] = selected_no.degMNeighMax
         self.parents[selected_no.id] = None
@@ -202,7 +202,7 @@ class NodeCommand:
             else:
                 selected_no = min(self.nodes, key=lambda k: k.present)
             #
-            self.update_no(selected_no,n)
+            self.update_no(selected_no, n)
             self.nodes_order[n] = selected_no.id
             self.nodes_degMNeighMax[n] = selected_no.degMNeighMax
             n += 1
@@ -542,7 +542,7 @@ class GraphMatcher:
                 sum_degree = self.G1_sum_neighbors_degree[ind]
                 #
                 if sum_degree not in sum_degree_counter:
-                   return False
+                    return False
                 #
                 if self.node_label == None:
                     prob = degree_counter[degree] * sum_degree_counter[sum_degree]
@@ -1468,7 +1468,7 @@ class DiNodeCommand(NodeCommand):
     of the NodeOrderingProp class.
     """
 
-    def update_no(self, no,level):
+    def update_no(self, no, level):
         """Marks a node as present and updates its neighbors' properties.
 
         Parameters:
@@ -1476,7 +1476,7 @@ class DiNodeCommand(NodeCommand):
         """
         no.present = 1
         no.candidate = 1
-        degM=no.degM if no.degM<self.limit else self.limit
+        degM = no.degM if no.degM < self.limit else self.limit
         no.degM = 0
         node = no.node
         #
@@ -1488,18 +1488,18 @@ class DiNodeCommand(NodeCommand):
                 no.degMNeighMax = no_neigh.degM
             #
             if no_neigh.present == 0:
-                if self.nodes_limit[no_neigh.id]<self.limit:
-                   self.update_degMNeigh_and_degMo(no_neigh)
-                   self.nodes_limit[no_neigh.id]+=1
+                if self.nodes_limit[no_neigh.id] < self.limit:
+                    self.update_degMNeigh_and_degMo(no_neigh)
+                    self.nodes_limit[no_neigh.id] += 1
                 #
                 no_neigh.degM += 1
                 no_neigh.degNeigh += self.graph_matcher.G1_o.number_of_edges(
                     node, neighbor
                 ) + self.graph_matcher.G1_o.number_of_edges(neighbor, node)
                 #
-                no_neigh.degMNeigh-=degM
-                if level==0:
-                   no_neigh.degMo-=1
+                no_neigh.degMNeigh -= degM
+                if level == 0:
+                    no_neigh.degMo -= 1
 
             if no_neigh.candidate == 0:
                 no_neigh.candidate = 1
