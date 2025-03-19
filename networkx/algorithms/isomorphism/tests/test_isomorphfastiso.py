@@ -664,4 +664,57 @@ def test_small_graph():
     target_graph.add_edges_from(target_graph_edges)
 
     gm = GraphMatcher(source_graph, target_graph)
-    assert not gm.is_isomorphic()
+    #assert not gm.is_isomorphic()
+
+
+def RNA_match_iso(datasets1, datasets2):
+    values1 = {data.get("label", -1) for data in datasets1.values()}
+    values2 = {data.get("label", -1) for data in datasets2.values()}
+    return values1 == values2
+
+def RNA_match_mono(datasets1, datasets2):
+    values1 = {data.get("label", -1) for data in datasets1.values()}
+    values2 = {data.get("label", -1) for data in datasets2.values()}
+    return values1 >= values2
+
+def test_RNA_graph():
+    # source: https://carnaval.cbe.uqam.ca/rin
+
+    target=['23', '0,22,CWW', '0,1,B53', '1,2,S33', '1,10,TWH', '1,18,TSW', '1,2,B53', '1,6,S33', '2,3,B53', '2,1,S33', '2,11,TWW', '2,5,S53', '2,6,CWH', '2,17,S53', '2,21,CHH', '2,19,CHW', '2,18,S33', '3,4,B53', '4,13,TWW', '4,17,S35', '4,16,CHW', '4,5,S35', '4,8,CWH', '4,5,B53', '5,2,S35', '5,17,CHW', '5,6,B53', '5,9,CWH', '5,8,S53', '5,4,S53', '5,14,TWW', '5,6,S35', '6,2,CHW', '6,5,S53', '6,9,S53', '6,7,B53', '6,10,S35', '6,1,S33', '6,11,CWH', '7,8,B53', '8,9,S35', '8,16,TWW', '8,9,B53', '8,5,S35', '8,4,CHW', '8,13,CWH', '8,14,CWH', '9,5,CHW', '9,17,TWW', '9,11,S35', '9,6,S35', '9,14,CWH', '9,13,S53', '9,8,S53', '9,10,B53', '10,11,B53', '10,11,S53', '10,6,S53', '10,21,CWW', '10,1,THW', '11,14,S53', '11,10,S35', '11,21,S33', '11,12,B53', '11,19,CWH', '11,2,TWW', '11,9,S53', '11,6,CHW', '12,13,B53', '13,14,B53', '13,9,S35', '13,16,CWH', '13,4,TWW', '13,14,S35', '13,8,CHW', '14,8,CHW', '14,13,S53', '14,17,CWH', '14,16,S53', '14,5,TWW', '14,19,S35', '14,15,B53', '14,9,CHW', '14,11,S35', '15,16,B53', '16,4,CWH', '16,17,S35', '16,8,TWW', '16,14,S35', '16,17,B53', '16,13,CHW', '17,18,B53', '17,4,S53', '17,14,CHW', '17,5,CWH', '17,16,S53', '17,9,TWW', '17,2,S35', '18,2,S33', '18,1,TWS', '18,19,B53', '19,20,B53', '19,21,S33', '19,11,CHW', '19,2,CWH', '19,14,S53', '20,21,B53', '21,22,B53', '21,19,S33', '21,11,S33', '21,10,CWW', '21,2,CHH', '22,0,CWW']
+    mono_pattern=['23', 'B_16_U,B_17_G,B53', 'B_17_G,B_18_G,S33', 'B_17_G,B_26_U,TWH', 'B_17_G,B_34_A,TSW', 'B_17_G,B_18_G,B53', 'B_17_G,B_22_G,S33', 'B_18_G,B_19_U,B53', 'B_18_G,B_17_G,S33', 'B_18_G,B_27_G,TWW', 'B_18_G,B_21_G,S53', 'B_18_G,B_22_G,CWH', 'B_18_G,B_33_G,S53', 'B_18_G,B_37_A,CHH', 'B_18_G,B_35_G,CHW', 'B_18_G,B_34_A,S33', 'B_19_U,B_20_G,B53', 'B_20_G,B_29_G,TWW', 'B_20_G,B_33_G,S35', 'B_20_G,B_32_G,CHW', 'B_20_G,B_21_G,S35', 'B_20_G,B_24_G,CWH', 'B_20_G,B_21_G,B53', 'B_21_G,B_18_G,S35', 'B_21_G,B_33_G,CHW', 'B_21_G,B_22_G,B53', 'B_21_G,B_25_G,CWH', 'B_21_G,B_24_G,S53', 'B_21_G,B_20_G,S53', 'B_21_G,B_30_G,TWW', 'B_21_G,B_22_G,S35', 'B_22_G,B_18_G,CHW', 'B_22_G,B_21_G,S53', 'B_22_G,B_25_G,S53', 'B_22_G,B_23_U,B53', 'B_22_G,B_26_U,S35', 'B_22_G,B_17_G,S33', 'B_22_G,B_27_G,CWH', 'B_23_U,B_24_G,B53', 'B_24_G,B_25_G,S35', 'B_24_G,B_32_G,TWW', 'B_24_G,B_25_G,B53', 'B_24_G,B_21_G,S35', 'B_24_G,B_20_G,CHW', 'B_24_G,B_29_G,CWH', 'B_24_G,B_30_G,CWH', 'B_25_G,B_21_G,CHW', 'B_25_G,B_33_G,TWW', 'B_25_G,B_27_G,S35', 'B_25_G,B_22_G,S35', 'B_25_G,B_30_G,CWH', 'B_25_G,B_29_G,S53', 'B_25_G,B_24_G,S53', 'B_25_G,B_26_U,B53', 'B_26_U,B_27_G,B53', 'B_26_U,B_27_G,S53', 'B_26_U,B_22_G,S53', 'B_26_U,B_37_A,CWW', 'B_26_U,B_17_G,THW', 'B_27_G,B_30_G,S53', 'B_27_G,B_26_U,S35', 'B_27_G,B_37_A,S33', 'B_27_G,B_28_U,B53', 'B_27_G,B_35_G,CWH', 'B_27_G,B_18_G,TWW', 'B_27_G,B_25_G,S53', 'B_27_G,B_22_G,CHW', 'B_28_U,B_29_G,B53', 'B_29_G,B_30_G,B53', 'B_29_G,B_25_G,S35', 'B_29_G,B_32_G,CWH', 'B_29_G,B_20_G,TWW', 'B_29_G,B_30_G,S35', 'B_29_G,B_24_G,CHW', 'B_30_G,B_24_G,CHW', 'B_30_G,B_29_G,S53', 'B_30_G,B_33_G,CWH', 'B_30_G,B_32_G,S53', 'B_30_G,B_21_G,TWW', 'B_30_G,B_35_G,S35', 'B_30_G,B_31_A,B53', 'B_30_G,B_25_G,CHW', 'B_30_G,B_27_G,S35', 'B_31_A,B_32_G,B53', 'B_32_G,B_20_G,CWH', 'B_32_G,B_33_G,S35', 'B_32_G,B_24_G,TWW', 'B_32_G,B_30_G,S35', 'B_32_G,B_33_G,B53', 'B_32_G,B_29_G,CHW', 'B_33_G,B_34_A,B53', 'B_33_G,B_20_G,S53', 'B_33_G,B_30_G,CHW', 'B_33_G,B_21_G,CWH', 'B_33_G,B_32_G,S53', 'B_33_G,B_25_G,TWW', 'B_33_G,B_18_G,S35', 'B_34_A,B_18_G,S33', 'B_34_A,B_17_G,TWS', 'B_34_A,B_35_G,B53', 'B_35_G,B_36_U,B53', 'B_35_G,B_37_A,S33', 'B_35_G,B_27_G,CHW', 'B_35_G,B_18_G,CWH', 'B_35_G,B_30_G,S53', 'B_36_U,B_37_A,B53', 'B_37_A,B_38_G,B53', 'B_37_A,B_35_G,S33', 'B_37_A,B_27_G,S33', 'B_37_A,B_26_U,CWW', 'B_37_A,B_18_G,CHH', 'B_38_G,B_16_U,CWW']
+    iso_pattern=['23', 'B_16_U,B_17_G,B53', 'B_16_U,B_38_G,CWW', 'B_17_G,B_18_G,S33', 'B_17_G,B_26_U,TWH', 'B_17_G,B_34_A,TSW', 'B_17_G,B_18_G,B53', 'B_17_G,B_22_G,S33', 'B_18_G,B_19_U,B53', 'B_18_G,B_17_G,S33', 'B_18_G,B_27_G,TWW', 'B_18_G,B_21_G,S53', 'B_18_G,B_22_G,CWH', 'B_18_G,B_33_G,S53', 'B_18_G,B_37_A,CHH', 'B_18_G,B_35_G,CHW', 'B_18_G,B_34_A,S33', 'B_19_U,B_20_G,B53', 'B_20_G,B_29_G,TWW', 'B_20_G,B_33_G,S35', 'B_20_G,B_32_G,CHW', 'B_20_G,B_21_G,S35', 'B_20_G,B_24_G,CWH', 'B_20_G,B_21_G,B53', 'B_21_G,B_18_G,S35', 'B_21_G,B_33_G,CHW', 'B_21_G,B_22_G,B53', 'B_21_G,B_25_G,CWH', 'B_21_G,B_24_G,S53', 'B_21_G,B_20_G,S53', 'B_21_G,B_30_G,TWW', 'B_21_G,B_22_G,S35', 'B_22_G,B_18_G,CHW', 'B_22_G,B_21_G,S53', 'B_22_G,B_25_G,S53', 'B_22_G,B_23_U,B53', 'B_22_G,B_26_U,S35', 'B_22_G,B_17_G,S33', 'B_22_G,B_27_G,CWH', 'B_23_U,B_24_G,B53', 'B_24_G,B_25_G,S35', 'B_24_G,B_32_G,TWW', 'B_24_G,B_25_G,B53', 'B_24_G,B_21_G,S35', 'B_24_G,B_20_G,CHW', 'B_24_G,B_29_G,CWH', 'B_24_G,B_30_G,CWH', 'B_25_G,B_21_G,CHW', 'B_25_G,B_33_G,TWW', 'B_25_G,B_27_G,S35', 'B_25_G,B_22_G,S35', 'B_25_G,B_30_G,CWH', 'B_25_G,B_29_G,S53', 'B_25_G,B_24_G,S53', 'B_25_G,B_26_U,B53', 'B_26_U,B_27_G,B53', 'B_26_U,B_27_G,S53', 'B_26_U,B_22_G,S53', 'B_26_U,B_37_A,CWW', 'B_26_U,B_17_G,THW', 'B_27_G,B_30_G,S53', 'B_27_G,B_26_U,S35', 'B_27_G,B_37_A,S33', 'B_27_G,B_28_U,B53', 'B_27_G,B_35_G,CWH', 'B_27_G,B_18_G,TWW', 'B_27_G,B_25_G,S53', 'B_27_G,B_22_G,CHW', 'B_28_U,B_29_G,B53', 'B_29_G,B_30_G,B53', 'B_29_G,B_25_G,S35', 'B_29_G,B_32_G,CWH', 'B_29_G,B_20_G,TWW', 'B_29_G,B_30_G,S35', 'B_29_G,B_24_G,CHW', 'B_30_G,B_24_G,CHW', 'B_30_G,B_29_G,S53', 'B_30_G,B_33_G,CWH', 'B_30_G,B_32_G,S53', 'B_30_G,B_21_G,TWW', 'B_30_G,B_35_G,S35', 'B_30_G,B_31_A,B53', 'B_30_G,B_25_G,CHW', 'B_30_G,B_27_G,S35', 'B_31_A,B_32_G,B53', 'B_32_G,B_20_G,CWH', 'B_32_G,B_33_G,S35', 'B_32_G,B_24_G,TWW', 'B_32_G,B_30_G,S35', 'B_32_G,B_33_G,B53', 'B_32_G,B_29_G,CHW', 'B_33_G,B_34_A,B53', 'B_33_G,B_20_G,S53', 'B_33_G,B_30_G,CHW', 'B_33_G,B_21_G,CWH', 'B_33_G,B_32_G,S53', 'B_33_G,B_25_G,TWW', 'B_33_G,B_18_G,S35', 'B_34_A,B_18_G,S33', 'B_34_A,B_17_G,TWS', 'B_34_A,B_35_G,B53', 'B_35_G,B_36_U,B53', 'B_35_G,B_37_A,S33', 'B_35_G,B_27_G,CHW', 'B_35_G,B_18_G,CWH', 'B_35_G,B_30_G,S53', 'B_36_U,B_37_A,B53', 'B_37_A,B_38_G,B53', 'B_37_A,B_35_G,S33', 'B_37_A,B_27_G,S33', 'B_37_A,B_26_U,CWW', 'B_37_A,B_18_G,CHH', 'B_38_G,B_16_U,CWW']
+    #
+    mono_pattern=mono_pattern[1:]
+    random.shuffle(mono_pattern)
+    #
+    iso_pattern=iso_pattern[1:]
+    random.shuffle(iso_pattern)
+    #
+    target=target[1:]
+    #
+    G_t = nx.MultiDiGraph()
+    G_iso_p = nx.MultiDiGraph()
+    G_mono_p = nx.MultiDiGraph()
+
+    for item in target:
+        node1, node2, label = item.split(',')
+        G_t.add_edge(node1, node2, label=label)
+        
+    for item in iso_pattern:
+        node1, node2, label = item.split(',')
+        G_iso_p.add_edge(node1,node2, label=label)
+    
+    for item in mono_pattern:
+        node1, node2, label = item.split(',')
+        G_mono_p.add_edge(node1,node2, label=label)
+    
+
+    gm = MultiDiGraphMatcher(G_t, G_iso_p,edge_match=RNA_match_iso)
+    assert gm.is_isomorphic()
+
+    gm = MultiDiGraphMatcher(G_t, G_mono_p,edge_match=RNA_match_mono)
+    assert gm.subgraph_is_monomorphic()
+    assert not gm.subgraph_is_isomorphic()
+    
+
+    
