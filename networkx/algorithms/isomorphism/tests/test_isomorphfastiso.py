@@ -444,7 +444,7 @@ def test_multidigraph_isomorphism():
 
 def test_small_graph():
     # source: https://github.com/networkx/networkx/issues/4019#issuecomment-649457761
-    # FASTiso do it in 64 seconds
+    # FASTiso do it in 20 seconds
     # vf2 do it in 597 seconds
     # vf2pp do it in 1189 seconds
     source_graph_nodes = [
@@ -664,7 +664,7 @@ def test_small_graph():
     target_graph.add_edges_from(target_graph_edges)
 
     gm = GraphMatcher(source_graph, target_graph)
-    # assert not gm.is_isomorphic()
+    assert not gm.is_isomorphic()
 
 
 def RNA_match_iso(datasets1, datasets2):

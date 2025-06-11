@@ -487,8 +487,12 @@ class GraphMatcher:
             neighbor_degrees = [
                 G_degrees[G_nodes_ind[neighbor]] for neighbor in neighbors
             ]
-            sum_neighbors_degree[ind] = sum(neighbor_degrees)
-            max_neighbors_degree[ind] = max(neighbor_degrees)
+            if len(neighbor_degrees) != 0:
+                sum_neighbors_degree[ind] = sum(neighbor_degrees)
+                max_neighbors_degree[ind] = max(neighbor_degrees)
+            else:
+                sum_neighbors_degree[ind] = 0
+                max_neighbors_degree[ind] = 0
 
         return sum_neighbors_degree, max_neighbors_degree
 
@@ -606,8 +610,8 @@ class GraphMatcher:
                 # prop
                 or self.G1_max_neighbors_degree[G1_node_ind]
                 != self.G2_max_neighbors_degree[G2_node_ind]
-                or self.G1_max_neighbors_degree[G1_node_ind]
-                != self.G2_max_neighbors_degree[G2_node_ind]
+                or self.G1_sum_neighbors_degree[G1_node_ind]
+                != self.G2_sum_neighbors_degree[G2_node_ind]
                 or self.G1_self_edges[G1_node_ind] != self.G2_self_edges[G2_node_ind]
             ):
                 return False
@@ -644,8 +648,8 @@ class GraphMatcher:
                 # prop
                 or self.G1_max_neighbors_degree[G1_node_ind]
                 > self.G2_max_neighbors_degree[G2_node_ind]
-                or self.G1_max_neighbors_degree[G1_node_ind]
-                > self.G2_max_neighbors_degree[G2_node_ind]
+                or self.G1_sum_neighbors_degree[G1_node_ind]
+                > self.G2_sum_neighbors_degree[G2_node_ind]
                 or self.G1_self_edges[G1_node_ind] != self.G2_self_edges[G2_node_ind]
             ):
                 return False
@@ -682,8 +686,8 @@ class GraphMatcher:
                 # prop
                 or self.G1_max_neighbors_degree[G1_node_ind]
                 > self.G2_max_neighbors_degree[G2_node_ind]
-                or self.G1_max_neighbors_degree[G1_node_ind]
-                > self.G2_max_neighbors_degree[G2_node_ind]
+                or self.G1_sum_neighbors_degree[G1_node_ind]
+                > self.G2_sum_neighbors_degree[G2_node_ind]
                 or self.G1_self_edges[G1_node_ind] != self.G2_self_edges[G2_node_ind]
             ):
                 return False
@@ -720,8 +724,8 @@ class GraphMatcher:
                 # prop
                 or self.G1_max_neighbors_degree[G1_node_ind]
                 > self.G2_max_neighbors_degree[G2_node_ind]
-                or self.G1_max_neighbors_degree[G1_node_ind]
-                > self.G2_max_neighbors_degree[G2_node_ind]
+                or self.G1_sum_neighbors_degree[G1_node_ind]
+                > self.G2_sum_neighbors_degree[G2_node_ind]
                 or self.G1_self_edges[G1_node_ind] > self.G2_self_edges[G2_node_ind]
             ):
                 return False
